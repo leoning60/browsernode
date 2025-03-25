@@ -8,13 +8,13 @@
         "@types/jest": "^29.5.14",
         "@types/winston": "^2.4.4",
         "dotenv": "^16.4.7",
+        "vitest": "^3.0.9",
         "winston": "^3.17.0",
       },
       "devDependencies": {
         "@biomejs/biome": "1.9.4",
         "@types/bun": "latest",
         "@types/node": "^22.13.13",
-        "vitest": "^3.0.9",
       },
       "peerDependencies": {
         "typescript": "^5.8.2",
