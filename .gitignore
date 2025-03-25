@@ -7,9 +7,6 @@ bun.lockb
 .cursor
 .cursorrules
 
-# vscode
-.vscode
-
 # output
 out
 dist
@@ -41,3 +38,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# temp
+temp

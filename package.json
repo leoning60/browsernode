@@ -3,13 +3,14 @@
   "module": "src/index.ts",
   "type": "module",
   "scripts": {
-    "test": "biome check --write --unsafe",
+    "test": "vitest",
     "dev": "bun run src/index.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "@types/bun": "latest",
-    "@types/node": "^22.13.13"
+    "@types/node": "^22.13.13",
+    "vitest": "^3.0.9"
   },
   "peerDependencies": {
     "typescript": "^5.8.2"
