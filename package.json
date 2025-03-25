@@ -1,0 +1,24 @@
+{
+  "name": "browser-node",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "test": "biome check --write --unsafe",
+    "dev": "bun run src/index.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/bun": "latest",
+    "@types/node": "^22.13.13"
+  },
+  "peerDependencies": {
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@types/dotenv": "^8.2.3",
+    "@types/jest": "^29.5.14",
+    "@types/winston": "^2.4.4",
+    "dotenv": "^16.4.7",
+    "winston": "^3.17.0"
+  }
+}
