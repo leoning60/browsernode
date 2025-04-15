@@ -39,7 +39,7 @@ export class Controller<T = Context> {
 
 	constructor(
 		public excludeActions: string[] = [],
-		public outputModel: any = null, // TS equivalent of Optional[Type[BaseModel]]
+		public outputModel: any = null,
 	) {
 		// Initialize registry
 		this.registry = new Registry<T>(excludeActions);
@@ -109,10 +109,6 @@ export class Controller<T = Context> {
 		this.registry.action("Navigate to URL in the current tab", {
 			paramModel: GoToUrlAction,
 		})(async function goToUrl(params: GoToUrlAction, browser: BrowserContext) {
-			logger.info(`goToUrl params: ${JSON.stringify(params, null, 2)}`);
-			logger.info(`goToUrl browser: ${browser}`);
-			logger.info(`goToUrl browser.config: ${browser.config}`);
-			logger.info(`goToUrl browser.contextId: ${browser.contextId}`);
 			if (!browser) {
 				throw new Error("Browser context is required but was not provided");
 			}
@@ -141,19 +137,19 @@ export class Controller<T = Context> {
 		);
 
 		// Wait for x seconds
-		// this.registry.action("Wait for x seconds default 3", {
-		// 	paramModel: WaitAction,
-		// })(async function wait(params: WaitAction) {
-		// 	const msg = `🕒 Waiting for ${params.seconds} seconds`;
-		// 	logger.info(msg);
-		// 	await new Promise((resolve) =>
-		// 		setTimeout(resolve, params.seconds * 1000),
-		// 	);
-		// 	return new ActionResult({
-		// 		extractedContent: msg,
-		// 		includeInMemory: true,
-		// 	});
-		// });
+		this.registry.action("Wait for x seconds default 3", {
+			paramModel: WaitAction,
+		})(async function wait(params: WaitAction) {
+			const msg = `🕒 Waiting for ${params.seconds} seconds`;
+			logger.info(msg);
+			await new Promise((resolve) =>
+				setTimeout(resolve, params.seconds * 1000),
+			);
+			return new ActionResult({
+				extractedContent: msg,
+				includeInMemory: true,
+			});
+		});
 
 		// Element Interaction Actions
 		this.registry.action("Click element", {
@@ -725,16 +721,6 @@ export class Controller<T = Context> {
 				});
 			}
 		});
-
-		logger.debug(
-			"-------Controller.constructor after registry: actions start---------",
-		);
-		logger.debug(
-			`Controller.constructor after registry: actions: ${JSON.stringify(Object.fromEntries(this.registry.registry.actions))}`,
-		);
-		logger.debug(
-			"-------Controller.constructor after registry: actions end---------",
-		);
 	}
 
 	// Register actions decorator
@@ -756,12 +742,6 @@ export class Controller<T = Context> {
 			// Iterate through action's model properties, excluding unset fields
 			for (const [actionName, params] of Object.entries(action)) {
 				if (params !== undefined) {
-					logger.debug(
-						`Controller#act actionName:${actionName} params:${JSON.stringify(params, null, 2)}`,
-					);
-					logger.debug(
-						`Controller#act this.registry.executeAction入参 browserContext.contextId:${browserContext.contextId}`,
-					);
 					const result = await this.registry.executeAction(
 						actionName,
 						params,
