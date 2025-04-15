@@ -1,8 +1,18 @@
+import { modelDumpExcludedUnset } from "../../bn_utils";
+import bnLogger from "../../logging_config";
+
+const logger = bnLogger.child({
+	label: "browser_node/controller/registry/views",
+});
+
 class RegisteredAction {
+	/**
+	 * Model for a registered action
+	 */
 	name: string;
 	description: string;
-	function: (...args: any[]) => any;
-	paramModel: Record<string, any>;
+	function: (...args: any[]) => any; //type Callable
+	paramModel: Record<string, any> | undefined;
 
 	constructor(params: Omit<RegisteredAction, "promptDescription">) {
 		this.name = params.name;
@@ -11,10 +21,14 @@ class RegisteredAction {
 		this.paramModel = params.paramModel;
 	}
 
+	/**
+	 * Get the prompt description for the action
+	 * @returns The prompt description for the action
+	 */
 	promptDescription(): string {
 		const skipKeys = ["title"];
 
-		const transformedParams = Object.entries(this.paramModel).reduce(
+		const transformedParams = Object.entries(this.paramModel!).reduce(
 			(acc, [k, v]) => {
 				const filteredProps = Object.fromEntries(
 					Object.entries(v).filter(([subK]) => !skipKeys.includes(subK)),
@@ -29,21 +43,26 @@ class RegisteredAction {
 	}
 }
 
-interface ActionModelParams {
-	index?: number;
-	[key: string]: any;
-}
+/**
+ * Base model for dynamically created action models
+ */
 
 class ActionModel {
-	[key: string]: ActionModelParams | any;
+	// name: string;
+	// paramModel: Record<string, any>;
+	[key: string]: any;
 
-	constructor(params: Record<string, ActionModelParams>) {
+	constructor(params: Record<string, any>) {
 		Object.assign(this, params);
 	}
 
+	/**
+	 * Get the index of the action
+	 * @returns The index of the action
+	 */
 	getIndex(): number | null {
 		// Get all parameter values
-		const params = Object.values(this.modelDump());
+		const params = Object.values(modelDumpExcludedUnset(this, true));
 		if (!params.length) {
 			return null;
 		}
@@ -57,10 +76,14 @@ class ActionModel {
 		return null;
 	}
 
+	/**
+	 * Set the index of the action
+	 * @param index The index of the action
+	 */
 	setIndex(index: number): void {
 		// Get the action name and params
-		const actionData = this.modelDump();
-		const actionName = Object.keys(actionData)[0] as string;
+		const actionData = modelDumpExcludedUnset(this, true);
+		const actionName = Object.keys(actionData)[0] as keyof ActionModel;
 		const actionParams = this[actionName];
 
 		// Update the index if it exists on the params
@@ -68,21 +91,18 @@ class ActionModel {
 			actionParams.index = index;
 		}
 	}
-
-	private modelDump(): Record<string, ActionModelParams> {
-		// Filter out undefined/null values and function properties
-		return Object.fromEntries(
-			Object.entries(this).filter(
-				([_, value]) =>
-					value !== undefined && value !== null && typeof value !== "function",
-			),
-		);
-	}
 }
 
+/**
+ * Model representing the action registry
+ */
 class ActionRegistry {
 	actions: Map<string, RegisteredAction> = new Map();
 
+	/**
+	 * Get a description of all actions for the prompt
+	 * @returns The prompt description for the actions
+	 */
 	getPromptDescription(): string {
 		return Array.from(this.actions.values())
 			.map((action) => action.promptDescription())

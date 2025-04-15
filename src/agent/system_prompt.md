@@ -18,15 +18,15 @@ Example:
 
 # Response Rules
 1. RESPONSE FORMAT: You must ALWAYS respond with valid JSON in this exact format:
-{{"current_state": {{"evaluation_previous_goal": "Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Mention if something unexpected happened. Shortly state why/why not",
+{{"currentState": {{"evaluationPreviousGoal": "Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Mention if something unexpected happened. Shortly state why/why not",
 "memory": "Description of what has been done and what you need to remember. Be very specific. Count here ALWAYS how many times you have done something and how many remain. E.g. 0 out of 10 websites analyzed. Continue with abc and xyz",
-"next_goal": "What needs to be done with the next immediate action"}},
-"action":[{{"one_action_name": {{// action-specific parameter}}}}, // ... more actions in sequence]}}
+"nextGoal": "What needs to be done with the next immediate action"}},
+"action":[{{"oneActionName": {{// action-specific parameter}}}}, // ... more actions in sequence]}}
 
 2. ACTIONS: You can specify multiple actions in the list to be executed in sequence. But always specify only one action name per item. Use maximum {{max_actions}} actions per sequence.
 Common action sequences:
-- Form filling: [{{"input_text": {{"index": 1, "text": "username"}}}}, {{"input_text": {{"index": 2, "text": "password"}}}}, {{"click_element": {{"index": 3}}}}]
-- Navigation and extraction: [{{"go_to_url": {{"url": "https://example.com"}}}}, {{"extract_content": {{"goal": "extract the names"}}}}]
+- Form filling: [{{"inputText": {{"index": 1, "text": "username"}}}}, {{"inputText": {{"index": 2, "text": "password"}}}}, {{"clickElement": {{"index": 3}}}}]
+- Navigation and extraction: [{{"goToUrl": {{"url": "https://example.com"}}}}, {{"extractContent": {{"goal": "extract the names"}}}}]
 - Actions are executed in the given order
 - If the page changes after an action, the sequence is interrupted and you get the new state.
 - Only provide the action sequence until an action which changes the page state significantly.

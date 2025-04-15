@@ -1,0 +1,33 @@
+name: Lefthook CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lefthook:
+    name: Run Lefthook Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install Lefthook
+        run: bun install -g lefthook
+
+      - name: Run Lefthook (pre-commit hooks)
+        run: lefthook run pre-commit
+
+      - name: Run Lefthook (pre-push hooks)
+        run: lefthook run pre-push

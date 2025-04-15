@@ -1,11 +1,15 @@
 # dependencies (bun install)
 node_modules
 
-# bun
-bun.lockb
+# biome
+.biome
+
 # cursor
 .cursor
 .cursorrules
+
+# bun
+bun.lockb
 
 # output
 out
@@ -33,6 +37,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# VSCode
+.vscode
+
 # IntelliJ based IDEs
 .idea
 
@@ -41,3 +48,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # temp
 temp
+tmp

@@ -1,5 +1,5 @@
-import { describe, test, expect, beforeEach } from "vitest";
-import { RegisteredAction, ActionModel, ActionRegistry } from "../views";
+import { beforeEach, describe, expect, test } from "vitest";
+import { ActionModel, ActionRegistry, RegisteredAction } from "../views";
 
 describe("RegisteredAction", () => {
 	let action: RegisteredAction;
