@@ -142,10 +142,6 @@ export class BrowserContextConfig {
 		this.geolocation = params.geolocation ?? null;
 		this.permissions = params.permissions ?? null;
 		this.timezoneId = params.timezoneId ?? null;
-
-		logger.debug(
-			`BrowserContextConfig constructor: ${JSON.stringify(this, null, 2)}`,
-		);
 	}
 }
 
