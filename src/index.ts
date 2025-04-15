@@ -1,7 +1,5 @@
-// Export the Agent class
 export { Agent } from "./agent/service";
 
-// Export other essential types that might be needed
 export {
 	AgentOutput,
 	AgentState,

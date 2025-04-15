@@ -1,3 +1,4 @@
+import { Logger } from "winston";
 import bnLogger from "../logging_config";
 import { timeExecution } from "../utils";
 import { HistoryTreeProcessor } from "./history_tree_processor/service";
@@ -8,7 +9,7 @@ import type {
 	ViewportInfo,
 } from "./history_tree_processor/view";
 
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/dom/views",
 });
 
@@ -16,8 +17,6 @@ const logger = bnLogger.child({
 class DOMBaseNode {
 	constructor(
 		public isVisible: boolean,
-		// Optional parent property using TS optional chaining
-		// Forward reference to DOMElementNode using string literal type
 		public parent?: DOMElementNode | null,
 	) {}
 }
@@ -112,10 +111,13 @@ class DOMElementNode extends DOMBaseNode {
 		return tagStr;
 	}
 
-	// This could be implemented with a getter and private cache variable
-	// TODO: implement this
+	private _hash: HashedDomElement | null = null;
+
 	get hash(): HashedDomElement {
-		return HistoryTreeProcessor._hashDomElement(this);
+		if (this._hash === null) {
+			this._hash = HistoryTreeProcessor._hashDomElement(this);
+		}
+		return this._hash;
 	}
 
 	getAllTextTillNextClickableElement(maxDepth: number = -1): string {

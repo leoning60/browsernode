@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * 将Zod Schema对象简化为易读的结构
- * @param schema Zod Schema对象
- * @returns 简化后的结构，显示每个字段的类型名称
+ * simplify Zod Schema object to readable structure
+ * @param schema Zod Schema object
+ * @returns simplified structure, showing the type name of each field
  */
 export function simplifyZodSchema(schema: z.ZodObject<any>) {
 	interface SchemaInfo {

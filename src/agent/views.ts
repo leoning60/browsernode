@@ -4,11 +4,7 @@ import { Logger } from "winston";
 import { z } from "zod";
 import { MessageManagerState } from "../agent/message_manager/views";
 import type { BrowserStateHistory } from "../browser/views";
-import type {
-	ActionModel,
-	ActionRegistry,
-	RegisteredAction,
-} from "../controller/registry/views";
+import type { ActionModel } from "../controller/registry/views";
 import { HistoryTreeProcessor } from "../dom/history_tree_processor/service";
 import { DOMHistoryElement } from "../dom/history_tree_processor/view";
 import type { DOMElementNode } from "../dom/views";

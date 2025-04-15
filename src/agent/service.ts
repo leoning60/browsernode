@@ -3,8 +3,6 @@ import { existsSync, readFileSync } from "fs";
 import path, { resolve } from "path";
 import { inspect, promisify } from "util";
 import { config } from "dotenv";
-import { v4 as uuidv4 } from "uuid";
-import { z } from "zod";
 
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import {
@@ -42,12 +40,10 @@ import {
 	extractJsonFromModelOutput,
 	saveConversation,
 } from "./message_manager/utils";
-import { MessageManagerState } from "./message_manager/views";
 import { AgentMessagePrompt, PlannerPrompt, SystemPrompt } from "./prompt";
 
-import { simplifyZodSchema } from "../bn_utils";
 import bnLogger from "../logging_config";
-import { timeExecution, timeExecutionAsync } from "../utils";
+import { timeExecution } from "../utils";
 
 // Load environment variables
 config();
@@ -57,10 +53,8 @@ const logger = bnLogger.child({
 
 function logResponse(response: AgentOutput): void {
 	/**
-	 * 记录模型响应的工具函数
+	 * log model response
 	 */
-
-	// 根据目标评估结果选择表情符号
 	let emoji: string;
 	if (response.currentState.evaluationPreviousGoal.includes("Success")) {
 		emoji = "👍";

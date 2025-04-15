@@ -9,7 +9,7 @@ import type {
 } from "playwright";
 import { errors as playwrightErrors } from "playwright";
 import * as uuid from "uuid";
-import winston from "winston";
+import { Logger } from "winston";
 
 import { BrowserError, TabInfo, URLNotAllowedError } from "./views";
 
@@ -22,7 +22,7 @@ import { Browser } from "./browser";
 import { BrowserState } from "./views";
 type TimeoutError = playwrightErrors.TimeoutError;
 
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/browser/context",
 });
 interface BrowserContextWindowSize {
@@ -753,7 +753,6 @@ export class BrowserContext {
 					if (container) {
 						container.remove();
 					}
-
 					// Remove highlight attributes from elements
 					const highlightedElements = document.querySelectorAll('[browser-user-highlight-id^="playwright-highlight-"]');
 					highlightedElements.forEach(el => {

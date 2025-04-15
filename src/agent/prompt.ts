@@ -1,10 +1,4 @@
-import {
-	AIMessage,
-	BaseMessage,
-	HumanMessage,
-	SystemMessage,
-	ToolMessage,
-} from "@langchain/core/messages";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -55,7 +49,6 @@ export class SystemPrompt {
 
 	private loadPromptTemplate(): void {
 		try {
-			// Note: You'll need to adjust this path based on your project structure
 			this.promptTemplate = readFileSync(
 				join(__dirname, "system_prompt.md"),
 				"utf-8",

@@ -53,7 +53,7 @@ describe("DOM Tree Processing", () => {
 				await page.goto(
 					"https://www.npmjs.com/package/@google-cloud/vertexai",
 					{
-						waitUntil: "networkidle", // 等待网络请求完成
+						waitUntil: "networkidle", // wait for network requests to finish
 					},
 				);
 
@@ -88,7 +88,7 @@ describe("DOM Tree Processing", () => {
 						console.error('Browser error:', error);
 						return { error: error.toString() };
 					}
-				})()`); // 立即执行函数
+				})()`);
 				console.log("domTree:", domTree);
 
 				if (!domTree) {
@@ -112,5 +112,5 @@ describe("DOM Tree Processing", () => {
 			}
 		},
 		{ timeout: 20000 },
-	); // 增加超时时间到20秒
+	);
 });

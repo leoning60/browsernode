@@ -19,7 +19,7 @@ function timeExecution(additionalText = "") {
 			const startTime = Date.now();
 			const result = originalMethod.apply(this, args);
 
-			// 处理异步结果
+			// handle async result
 			if (result instanceof Promise) {
 				return result.then((value) => {
 					const executionTime = (Date.now() - startTime) / 1000;
@@ -30,7 +30,7 @@ function timeExecution(additionalText = "") {
 				});
 			}
 
-			// 处理同步结果
+			// handle sync result
 			const executionTime = (Date.now() - startTime) / 1000;
 			logger.debug(
 				`${additionalText} Execution time: ${executionTime.toFixed(2)} seconds`,

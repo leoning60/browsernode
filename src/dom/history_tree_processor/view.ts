@@ -1,12 +1,11 @@
-import winston from "winston";
+import { Logger } from "winston";
 import bnLogger from "../../logging_config";
 
 // Setup logger
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/dom/history_tree_processor/view",
 });
 
-// Interface for HashedDomElement (replacing dataclass)
 interface HashedDomElement {
 	/**
 	 * Hash of the dom element to be used as a unique identifier
@@ -42,7 +41,6 @@ interface ViewportInfo {
 	height: number;
 }
 
-// Class for DOMHistoryElement (replacing dataclass with optional properties)
 class DOMHistoryElement {
 	constructor(
 		public tagName: string,

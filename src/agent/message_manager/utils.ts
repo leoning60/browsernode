@@ -178,7 +178,6 @@ export function writeMessagesToFile(
 
 export function writeResponseToFile(writer: any, response: any): void {
 	writer.write(" RESPONSE\n");
-	// Assuming response has a toJSON method or similar
 	const responseJson = JSON.parse(JSON.stringify(response));
 	writer.write(JSON.stringify(responseJson, null, 2));
 }

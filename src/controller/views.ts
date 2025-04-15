@@ -151,17 +151,3 @@ export class ExtractPageContentAction {
 export class NoParamsAction {
 	constructor() {}
 }
-
-// ActionTypes
-// export  ActionTypes =
-// 	| SearchGoogleAction
-// 	| GoToUrlAction
-// 	| ClickElementAction
-// 	| InputTextAction
-// 	| DoneAction
-// 	| SwitchTabAction
-// 	| OpenTabAction
-// 	| ScrollAction
-// 	| SendKeysAction
-// 	| ExtractPageContentAction
-// 	| NoParamsAction;

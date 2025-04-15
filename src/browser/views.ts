@@ -1,4 +1,4 @@
-import winston from "winston";
+import { Logger } from "winston";
 import type { DOMHistoryElement } from "../dom/history_tree_processor/view";
 import type {
 	DOMElementNode,
@@ -8,7 +8,7 @@ import type {
 } from "../dom/views";
 import bnLogger from "../logging_config";
 
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/browser/views",
 });
 
