@@ -291,13 +291,6 @@ export class Agent<T = Context> {
 				this.browser.config.newContextConfig,
 			);
 		}
-		logger.debug(`Agent#constructor browser: ${this.browser}`);
-		logger.debug(
-			`Agent#constructor browserContext.contextId: ${this.browserContext.contextId}`,
-		);
-		logger.debug(
-			`Agent#constructor browserContext.config: ${JSON.stringify(this.browserContext.config, null, 2)}`,
-		);
 
 		// Callbacks
 		this.registerNewStepCallback = registerNewStepCallback;
@@ -376,8 +369,6 @@ export class Agent<T = Context> {
 			this.version = "unknown";
 			this.source = "unknown";
 		}
-
-		logger.debug(`Version: ${this.version}, Source: ${this.source}`);
 	}
 
 	private setModelNames(): void {
@@ -410,62 +401,8 @@ export class Agent<T = Context> {
 	}
 
 	private setupActionModels(): void {
-		logger.debug(
-			"-------this.controller.registry.registry.actions start---------",
-		);
-		logger.debug(
-			`this.controller.registry.registry.actions: ${JSON.stringify(Object.fromEntries(this.controller.registry.registry.actions))}`,
-		);
-		logger.debug(
-			"-------this.controller.registry.registry.actions end---------",
-		);
 		this.ActionModel = this.controller.registry.createActionModel();
-		logger.debug("-------this.ActionModel start---------");
-		logger.debug("this.ActionModel.shape:");
-		logger.debug(this.ActionModel.shape);
-		logger.debug("--------------------------------");
-		/* zod 的schema
-				for (const [key, value] of Object.entries(this.ActionModel.shape)) {
-			if (value && typeof value === "object" && "constructor" in value) {
-				logger.debug(`${key}: ${(value as any).constructor.name}`);
-			} else {
-				logger.debug(`${key}: unknown constructor`);
-			}
-		}
-		*/
-		// logger.debug(
-		// 	"JSON.stringify(this.ActionModel):",
-		// 	JSON.stringify(this.ActionModel, null, 2),
-		// );
-		/*这个只能log 实例,不能log type
-
-		logger.debug("this.ActionModel.prototype:");
-		logger.debug(this.ActionModel.prototype);
-		logger.debug("this.ActionModel.prototype 的属性:");
-		const properties = Object.getOwnPropertyNames(this.ActionModel.prototype);
-		properties.forEach((prop) => {
-			const propValue = this.ActionModel.prototype[prop];
-			if (typeof propValue === "function") {
-				logger.debug(`${prop}: [Function ${propValue.name || "anonymous"}]`);
-			} else {
-				logger.debug(`${prop}:`, propValue);
-			}
-		});
-		*/
-		logger.debug("-------this.ActionModel end---------");
 		this.AgentOutput = AgentOutput.typeWithCustomActions(this.ActionModel);
-
-		logger.debug("-------this.AgentOutput start---------");
-		logger.debug(this.AgentOutput);
-		/* Zod schema使用
-				for (const [key, value] of Object.entries(this.AgentOutput.shape)) {
-			if (value && typeof value === "object" && "constructor" in value) {
-				logger.debug(`${key}: ${(value as any).constructor.name}`);
-			} else {
-				logger.debug(`${key}: unknown constructor`);
-			}
-		}*/
-		logger.debug("-------this.AgentOutput end---------");
 		// Used to force the done action when max_steps is reached
 		this.DoneActionModel = this.controller.registry.createActionModel(["done"]);
 		this.DoneAgentOutput = AgentOutput.typeWithCustomActions(
@@ -524,9 +461,7 @@ export class Agent<T = Context> {
 
 		try {
 			state = await this.browserContext.getState();
-
 			await this.raiseIfStoppedOrPaused();
-
 			this._messageManager.addStateMessage(
 				state,
 				this.state.lastResult ?? undefined,
@@ -568,11 +503,6 @@ export class Agent<T = Context> {
 
 			try {
 				modelOutput = await this.getNextAction(inputMessages);
-				logger.debug(
-					"---step getNextAction modelOutput:" +
-						JSON.stringify(modelOutput, null, 2),
-				);
-
 				this.state.nSteps += 1;
 
 				if (this.registerNewStepCallback) {
@@ -604,18 +534,7 @@ export class Agent<T = Context> {
 				this._messageManager.removeLastStateMessage();
 				throw e;
 			}
-			logger.debug(
-				`this._messageManager:${JSON.stringify(this._messageManager, null, 2)}`,
-			);
-			logger.debug("---multiAct start");
-			logger.debug(
-				"---multiAct modelOutput.action:" +
-					JSON.stringify(modelOutput.action, null, 2),
-			);
 			result = await this.multiAct(modelOutput.action);
-			logger.debug("---multiAct result:" + JSON.stringify(result, null, 2));
-			logger.debug("---multiAct end");
-
 			this.state.lastResult = result;
 
 			if (result.length > 0 && result[result.length - 1]?.isDone) {
@@ -794,25 +713,10 @@ export class Agent<T = Context> {
 	public async getNextAction(
 		inputMessages: BaseMessage[],
 	): Promise<AgentOutput> {
-		logger.info(
-			"---getNextAction inputMessages is null ?:" + (inputMessages === null),
-		);
-		// logger.debug(
-		// 	"---getNextAction inputMessages:" +
-		// 		JSON.stringify(inputMessages, null, 2),
-		// );
 		inputMessages = this.convertInputMessages(inputMessages);
-		logger.debug(
-			"---getNextAction convertInputMessages:" +
-				JSON.stringify(inputMessages, null, 2),
-		);
-		logger.debug("---getNextAction this.llm.invoke start");
+
 		if (this.toolCallingMethod === "raw") {
 			const output = await this.llm.invoke(inputMessages);
-			logger.debug(
-				"---this.toolCallingMethod === 'raw' output:" +
-					JSON.stringify(output, null, 2),
-			);
 			// Clean up think tags if present
 			const cleanedContent = this.removeThinkTags(String(output.content));
 			output.content = cleanedContent;
@@ -840,387 +744,9 @@ export class Agent<T = Context> {
 
 			return parsed;
 		} else {
-			logger.debug(
-				"---6.2.3 getNextAction else :this.llm.withStructuredOutput: start",
-			);
-			logger.debug(JSON.stringify(this.AgentOutput.prototype, null, 2));
-			logger.debug(this.AgentOutput);
-			logger.debug(
-				"---6.2.3 getNextAction else :this.llm.withStructuredOutput: end",
-			);
-
-			// logger.debug(
-			// 	"---structuredLLM output format:",
-			// 	JSON.stringify(this.AgentOutput, null, 2),
-			// );
-			const SimpleAgentOutput = z.object({
-				currentState: z.object({
-					evaluationPreviousGoal: z.string(),
-					memory: z.string(),
-					nextGoal: z.string(),
-				}),
-				action: z.array(this.ActionModel), // 简化动作结构
-			});
-
-			const SimpleSchema = {
-				schema: {
-					type: "object",
-					properties: {
-						currentState: {
-							type: "object",
-							properties: {
-								evaluationPreviousGoal: {
-									type: "string",
-									description:
-										"Success|Failed|Unknown with explanation of previous goal status",
-								},
-								memory: {
-									type: "string",
-									description:
-										"Description of what has been done and what needs to be remembered",
-								},
-								nextGoal: {
-									type: "string",
-									description: "What needs to be done next",
-								},
-							},
-							required: ["evaluationPreviousGoal", "memory", "nextGoal"],
-						},
-						action: {
-							type: "array",
-							items: {
-								type: "object",
-								properties: {
-									done: {
-										type: "object",
-										properties: {
-											success: { type: "boolean" },
-											text: { type: "string" },
-										},
-									},
-									searchGoogle: {
-										type: "object",
-										properties: { query: { type: "string" } },
-									},
-									goToUrl: {
-										type: "object",
-										properties: { url: { type: "string" } },
-									},
-									goBack: { type: "object", properties: {} },
-									wait: {
-										type: "object",
-										properties: { seconds: { type: "number" } },
-									},
-									clickElement: {
-										type: "object",
-										properties: {
-											index: { type: "number" },
-											xpath: { type: ["string", "null"] },
-										},
-									},
-									inputText: {
-										type: "object",
-										properties: {
-											index: { type: "number" },
-											text: { type: "string" },
-											xpath: { type: ["string", "null"] },
-										},
-									},
-									savePdf: { type: "object", properties: {} },
-									switchTab: {
-										type: "object",
-										properties: {
-											pageId: { type: "number" },
-										},
-									},
-									openTab: {
-										type: "object",
-										properties: {
-											url: { type: "string" },
-										},
-									},
-									extractContent: {
-										type: "object",
-										properties: {},
-									},
-									scrollDown: {
-										type: "object",
-										properties: {
-											amount: { type: ["number", "null"] },
-										},
-									},
-									scrollUp: {
-										type: "object",
-										properties: {
-											amount: { type: ["number", "null"] },
-										},
-									},
-									sendKeys: {
-										type: "object",
-										properties: {
-											keys: { type: "string" },
-										},
-									},
-									scrollToText: {
-										type: "object",
-										properties: {
-											text: { type: "string" },
-										},
-									},
-									getDropdownOptions: {
-										type: "object",
-										properties: {
-											index: { type: "number" },
-										},
-									},
-									selectDropdownOption: {
-										type: "object",
-										properties: {
-											index: { type: "number" },
-											text: { type: "string" },
-										},
-									},
-								},
-							},
-						},
-					},
-					required: ["currentState", "action"],
-				},
-			};
-
-			// Create a Zod schema equivalent to SimpleSchema
-			const SimpleZodSchema = z.object({
-				currentState: z.object({
-					evaluationPreviousGoal: z
-						.string()
-						.describe(
-							"Success|Failed|Unknown with explanation of previous goal status",
-						),
-					memory: z
-						.string()
-						.describe(
-							"Description of what has been done and what needs to be remembered",
-						),
-					nextGoal: z.string().describe("What needs to be done next"),
-				}),
-				action: z.array(
-					z.object({
-						done: z
-							.object({
-								success: z.boolean(),
-								text: z.string(),
-							})
-							.optional(),
-						searchGoogle: z
-							.object({
-								query: z.string(),
-							})
-							.optional(),
-						goToUrl: z
-							.object({
-								url: z.string(),
-							})
-							.optional(),
-						goBack: z.object({}).optional(),
-						// wait: z
-						// 	.object({
-						// 		seconds: z.number(),
-						// 	})
-						// 	.optional(),
-						clickElement: z
-							.object({
-								index: z.number(),
-								xpath: z.string().nullable(),
-							})
-							.optional(),
-						inputText: z
-							.object({
-								index: z.number(),
-								text: z.string(),
-								xpath: z.string().nullable(),
-							})
-							.optional(),
-						savePdf: z.object({}).optional(),
-						switchTab: z
-							.object({
-								pageId: z.number(),
-							})
-							.optional(),
-						openTab: z
-							.object({
-								url: z.string(),
-							})
-							.optional(),
-						extractContent: z.object({}).optional(),
-						scrollDown: z
-							.object({
-								amount: z.number().nullable(),
-							})
-							.optional(),
-						scrollUp: z
-							.object({
-								amount: z.number().nullable(),
-							})
-							.optional(),
-						sendKeys: z
-							.object({
-								keys: z.string(),
-							})
-							.optional(),
-						scrollToText: z
-							.object({
-								text: z.string(),
-							})
-							.optional(),
-						getDropdownOptions: z
-							.object({
-								index: z.number(),
-							})
-							.optional(),
-						selectDropdownOption: z
-							.object({
-								index: z.number(),
-								text: z.string(),
-							})
-							.optional(),
-					}),
-				),
-			});
-
-			logger.debug("---SimpleSchema:" + JSON.stringify(SimpleSchema, null, 2));
-			logger.debug(
-				"---SimpleZodSchema:" + JSON.stringify(SimpleZodSchema, null, 2),
-			);
 			const agentOutputSchema = this.AgentOutput.schemaWithCustomActions(
 				this.ActionModel,
 			);
-			logger.debug(
-				"---agentOutputSchema:" +
-					JSON.stringify(simplifyZodSchema(agentOutputSchema), null, 2),
-			);
-
-			// Extract and log just the action part of the schema
-			if (agentOutputSchema.shape && agentOutputSchema.shape.action) {
-				// Get the action array schema
-				const actionArraySchema = agentOutputSchema.shape.action;
-
-				// Check if it's a ZodArray and has an element schema
-				if (
-					actionArraySchema instanceof z.ZodArray &&
-					actionArraySchema._def.type
-				) {
-					// Get the element schema (what's inside the array)
-					const actionElementSchema = actionArraySchema._def.type;
-
-					logger.debug(
-						"---agentOutputSchema action element:" +
-							JSON.stringify(actionElementSchema, null, 2),
-					);
-
-					// If the element is an object with properties, log them
-					if (
-						actionElementSchema instanceof z.ZodObject &&
-						actionElementSchema.shape
-					) {
-						logger.debug(
-							"---agentOutputSchema action properties:" +
-								JSON.stringify(Object.keys(actionElementSchema.shape), null, 2),
-						);
-
-						// Create a custom function to extract action schema details
-						const extractActionDetails = (actionSchema: z.ZodObject<any>) => {
-							const result: Record<string, any> = {};
-
-							// Go through each action property
-							for (const [actionName, actionProp] of Object.entries(
-								actionSchema.shape,
-							)) {
-								const prop = actionProp as any; // Type assertion for the actionProp
-
-								// Check if it's an optional field (most action properties are)
-								if (prop instanceof z.ZodOptional && prop._def.innerType) {
-									// If it's an object, extract its properties
-									if (prop._def.innerType instanceof z.ZodObject) {
-										const propShape = prop._def.innerType.shape;
-										// Extract property details
-										const propDetails: Record<string, string> = {};
-										for (const [propName, propType] of Object.entries(
-											propShape,
-										)) {
-											propDetails[propName] = (
-												propType as any
-											).constructor.name;
-										}
-										result[actionName] = propDetails;
-									} else {
-										result[actionName] = prop._def.innerType.constructor.name;
-									}
-								} else {
-									result[actionName] = prop.constructor.name;
-								}
-							}
-
-							return result;
-						};
-
-						logger.debug(
-							"---agentOutputSchema action details:" +
-								JSON.stringify(
-									extractActionDetails(actionElementSchema),
-									null,
-									2,
-								),
-						);
-
-						// Extract descriptions for actions
-						try {
-							const extractActionDescriptions = (
-								actionSchema: z.ZodObject<any>,
-							) => {
-								const descriptions: Record<string, string | null> = {};
-
-								for (const [actionName, actionProp] of Object.entries(
-									actionSchema.shape,
-								)) {
-									const prop = actionProp as any;
-
-									// Try to get the description from the property
-									if (prop._def && prop._def.description) {
-										descriptions[actionName] = prop._def.description;
-									} else if (
-										prop instanceof z.ZodOptional &&
-										prop._def.innerType &&
-										prop._def.innerType._def &&
-										prop._def.innerType._def.description
-									) {
-										descriptions[actionName] =
-											prop._def.innerType._def.description;
-									} else {
-										descriptions[actionName] = null;
-									}
-								}
-
-								return descriptions;
-							};
-
-							logger.debug(
-								"---agentOutputSchema action descriptions:" +
-									JSON.stringify(
-										extractActionDescriptions(actionElementSchema),
-										null,
-										2,
-									),
-							);
-						} catch (err) {
-							logger.debug("Error extracting action descriptions:", err);
-						}
-					}
-				}
-			}
-
-			// Choose which schema to use
-			const useZodSchema = true; // Set to true to use Zod Schema, false to use JSON Schema
-			const schemaToUse = useZodSchema ? SimpleZodSchema : SimpleSchema;
 
 			const structuredLLM = this.llm.withStructuredOutput(agentOutputSchema, {
 				includeRaw: true,
@@ -1282,17 +808,6 @@ export class Agent<T = Context> {
 	private logAgentRun(): void {
 		logger.info(`🚀 Starting task: ${this.task}`);
 		logger.debug(`Version: ${this.version}, Source: ${this.source}`);
-
-		// this.telemetry.capture({
-		// 	type: "AgentRunTelemetryEvent",
-		// 	agentId: this.state.agentId,
-		// 	useVision: this.settings.useVision,
-		// 	task: this.task,
-		// 	modelName: this.modelName,
-		// 	chatModelLibrary: this.chatModelLibrary,
-		// 	version: this.version,
-		// 	source: this.source,
-		// });
 	}
 
 	/**
@@ -1326,56 +841,6 @@ export class Agent<T = Context> {
 
 	@timeExecution("--run(agent)")
 	async run(maxSteps: number = 100): Promise<AgentHistoryList> {
-		logger.debug("--------------run this.agent start--------------");
-		logger.debug(this);
-		logger.debug("----------------this.agent end----------------");
-
-		// 专门查看AgentOutput的详细结构
-		logger.debug("----------Agent#run inspect(this.AgentOutput):-----------");
-		logger.debug(
-			inspect(this.AgentOutput, {
-				depth: 4,
-				colors: true,
-				showHidden: true,
-				maxArrayLength: null,
-				maxStringLength: null,
-			}),
-		);
-
-		// 查看AgentOutput原型链
-		logger.debug("-------Agent#run AgentOutput Prototype Chain-------");
-		let proto = Object.getPrototypeOf(this.AgentOutput);
-		let protoChain = [];
-		while (proto) {
-			protoChain.push(proto.constructor.name);
-			proto = Object.getPrototypeOf(proto);
-		}
-		logger.debug(protoChain);
-
-		// 查看AgentOutput实例化后的样子
-		logger.debug("-------Agent#run AgentOutput Instance Example-------");
-		try {
-			// 创建一个简单的实例，如果构造函数需要参数可能会失败
-			const exampleOutput = new this.AgentOutput({
-				currentState: {
-					evaluationPreviousGoal: "Success",
-					memory: "Example memory",
-					nextGoal: "Example goal",
-				},
-				action: [
-					{
-						action: "Example action",
-						reason: "Example reason",
-						extractedContent: "Example extracted content",
-						includeInMemory: true,
-					},
-				],
-			});
-			logger.debug(inspect(exampleOutput, { depth: 3, colors: true }));
-		} catch (e: any) {
-			logger.error("无法创建AgentOutput实例示例:", e.message);
-		}
-
 		try {
 			this.logAgentRun();
 
@@ -1459,9 +924,6 @@ export class Agent<T = Context> {
 		checkForNewElements: boolean = true,
 	): Promise<ActionResult[]> {
 		const results: ActionResult[] = [];
-		logger.debug(
-			`Agent#multiAct browserContext.contextId: ${this.browserContext.contextId}`,
-		);
 		const cachedSelectorMap = await this.browserContext.getSelectorMap();
 		const cachedPathHashes = new Set(
 			Array.from(Object.values(cachedSelectorMap)).map(
@@ -1470,10 +932,8 @@ export class Agent<T = Context> {
 		);
 
 		await this.browserContext.removeHighlights();
-		logger.debug(`multiAct actions.length:${actions.length}`);
 		for (let i = 0; i < actions.length; i++) {
 			const action = actions[i]!;
-			// logger.debug(`multiAct action:${JSON.stringify(action, null, 2)}`);
 			if (action.getIndex() !== null && i !== 0) {
 				const newState = await this.browserContext.getState();
 				const newPathHashes = new Set(
@@ -1492,29 +952,6 @@ export class Agent<T = Context> {
 			}
 
 			await this.raiseIfStoppedOrPaused();
-			logger.debug("this.controller.act start");
-			logger.debug(
-				`Agent#multiAct this.browserContext.contextId:${this.browserContext.contextId}`,
-			);
-			logger.debug(`Agent#multiAct action:${JSON.stringify(action, null, 2)}`);
-			logger.debug(
-				`Agent#multiAct this.browserContext.config:${JSON.stringify(this.browserContext.config, null, 2)}`,
-			);
-			logger.debug(
-				`Agent#multiAct this.settings.pageExtractionLLM:${JSON.stringify(this.settings.pageExtractionLLM, null, 2)}`,
-			);
-			logger.debug(
-				`Agent#multiAct this.controller.act this.sensitiveData:${JSON.stringify(this.sensitiveData, null, 2)}`,
-			);
-			logger.debug(
-				`Agent#multiAct this.controller.act this.settings.availableFilePaths:${JSON.stringify(this.settings.availableFilePaths, null, 2)}`,
-			);
-			logger.debug(
-				`Agent#multiAct this.controller.act this.context:${JSON.stringify(this.context, null, 2)}`,
-			);
-			logger.debug(
-				`Agent#multiAct this.controller.act this.state:${JSON.stringify(this.state, null, 2)}`,
-			);
 
 			const result = await this.controller.act(
 				action,
@@ -1524,14 +961,8 @@ export class Agent<T = Context> {
 				this.settings.availableFilePaths,
 				{ context: this.context },
 			);
-			logger.debug(
-				"this.controller.act result:" + JSON.stringify(result, null, 2),
-			);
-			logger.debug("this.controller.act end");
-			results.push(result);
-			logger.debug("results:" + JSON.stringify(results, null, 2));
 
-			logger.debug(`Executed action ${i + 1} / ${actions.length}`);
+			results.push(result);
 			if (
 				results[results.length - 1]?.isDone ||
 				results[results.length - 1]?.error ||
@@ -1915,8 +1346,6 @@ export class Agent<T = Context> {
 	}
 
 	async cleanupHttpxClients(): Promise<void> {
-		// In TypeScript, we'd use a different HTTP client library and its cleanup mechanism
-		// This is a placeholder for the equivalent functionality
 		logger.debug("Cleanup HTTP clients completed");
 	}
 
