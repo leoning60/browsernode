@@ -1,3 +1,6 @@
+import { spawn } from "child_process";
+import * as http from "http";
+import { promisify } from "util";
 import type {
 	BrowserType,
 	ElementHandle,
@@ -6,7 +9,7 @@ import type {
 	Browser as PlaywrightBrowser,
 	BrowserContext as PlaywrightBrowserContext,
 } from "playwright";
-import winston from "winston";
+import { Logger } from "winston";
 
 import {
 	chromium,
@@ -21,7 +24,7 @@ import { timeExecution } from "../utils";
 import { BrowserContext, BrowserContextConfig } from "./context";
 type TimeoutError = playwrightErrors.TimeoutError;
 
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/browser/browser",
 });
 
@@ -146,13 +149,82 @@ export class Browser {
 	private async setupBrowserWithInstance(
 		browser: BrowserType<{}>,
 	): Promise<PlaywrightBrowser> {
-		// Implementation would require Node.js equivalents for subprocess and requests
-		// This is a simplified version
 		if (!this.config.browserInstancePath) {
 			throw new Error("Chrome instance path is required");
 		}
-		// Add actual implementation here
-		throw new Error("Not implemented in this example");
+
+		// 检查Chrome实例是否已经运行
+		const checkChromeInstance = (): Promise<boolean> => {
+			return new Promise((resolve) => {
+				const req = http.get(
+					"http://localhost:9222/json/version",
+					(res: http.IncomingMessage) => {
+						if (res.statusCode === 200) {
+							resolve(true);
+						} else {
+							resolve(false);
+						}
+					},
+				);
+
+				req.on("error", () => {
+					resolve(false);
+				});
+
+				req.setTimeout(2000, () => {
+					req.destroy();
+					resolve(false);
+				});
+			});
+		};
+
+		try {
+			// 检查浏览器是否已经运行
+			const chromeRunning = await checkChromeInstance();
+			if (chromeRunning) {
+				this.logger.info("Reusing existing Chrome instance");
+				return browser.connectOverCDP("http://localhost:9222");
+			}
+		} catch (error) {
+			this.logger.debug(
+				"No existing Chrome instance found, starting a new one",
+			);
+		}
+
+		// 启动新的Chrome实例
+		const args = ["--remote-debugging-port=9222"];
+		if (this.config.headless) {
+			args.push("--headless");
+		}
+
+		// 合并额外的浏览器参数
+		const allArgs = [...args, ...this.config.extraBrowserArgs];
+
+		// 启动Chrome进程
+		const chromeProcess = spawn(this.config.browserInstancePath, allArgs, {
+			stdio: "ignore",
+			detached: true,
+		});
+		chromeProcess.unref();
+
+		// 等待Chrome启动
+		for (let i = 0; i < 10; i++) {
+			const chromeRunning = await checkChromeInstance();
+			if (chromeRunning) {
+				break;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+		}
+
+		// 连接到新实例
+		try {
+			return browser.connectOverCDP("http://localhost:9222");
+		} catch (error) {
+			this.logger.error(`Failed to start a new Chrome instance: ${error}`);
+			throw new Error(
+				"To start Chrome in Debug mode, you need to close all existing Chrome instances and try again otherwise we cannot connect to the instance.",
+			);
+		}
 	}
 
 	private async setupStandardBrowser(
