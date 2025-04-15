@@ -34,74 +34,32 @@ const logger = bnLogger.child({
 });
 
 class AgentSettings {
-	/**
-	 * 是否使用视觉功能
-	 */
 	useVision: boolean = true;
 
-	/**
-	 * 规划器是否使用视觉功能
-	 */
 	useVisionForPlanner: boolean = false;
 
-	/**
-	 * 对话保存路径
-	 */
 	saveConversationPath?: string;
 
-	/**
-	 * 对话保存编码
-	 */
 	saveConversationPathEncoding?: string = "utf-8";
 
-	/**
-	 * 最大失败次数
-	 */
 	maxFailures: number = 1;
 
-	/**
-	 * 重试延迟时间
-	 */
 	retryDelay: number = 10;
 
-	/**
-	 * 最大输入令牌数
-	 */
 	maxInputTokens: number = 128000;
 
-	/**
-	 * 是否验证输出
-	 */
 	validateOutput: boolean = false;
 
-	/**
-	 * 消息上下文
-	 */
 	messageContext?: string;
 
-	/**
-	 * 是否生成GIF
-	 */
 	generateGif: boolean | string = false;
 
-	/**
-	 * 可用文件路径
-	 */
 	availableFilePaths?: string[];
 
-	/**
-	 * 覆盖系统消息
-	 */
 	overrideSystemMessage?: string;
 
-	/**
-	 * 扩展系统消息
-	 */
 	extendSystemMessage?: string;
 
-	/**
-	 * 要包含的DOM属性
-	 */
 	includeAttributes: string[] = [
 		"title",
 		"type",
@@ -115,29 +73,14 @@ class AgentSettings {
 		"aria-expanded",
 	];
 
-	/**
-	 * 每步最大动作数
-	 */
 	maxActionsPerStep: number = 10;
 
-	/**
-	 * 工具调用方法
-	 */
 	toolCallingMethod?: ToolCallingMethod = "auto";
 
-	/**
-	 * 页面提取LLM
-	 */
 	pageExtractionLLM?: BaseChatModel;
 
-	/**
-	 * 规划器LLM
-	 */
 	plannerLLM?: BaseChatModel | null;
 
-	/**
-	 * 每N步运行一次规划器
-	 */
 	plannerInterval: number = 1;
 
 	constructor(settings: Partial<AgentSettings> = {}) {
@@ -194,16 +137,16 @@ class AgentState {
 			messageManagerState?: MessageManagerState;
 		} = {},
 	) {
-		this.agentId = params.agentId ?? uuid(); // 默认值为随机生成的 UUID
-		this.nSteps = params.nSteps ?? 1; // 默认值为 1
-		this.consecutiveFailures = params.consecutiveFailures ?? 0; // 默认值为 0
-		this.lastResult = params.lastResult ?? null; // 默认值为 null
-		this.history = params.history ?? new AgentHistoryList([]); // 默认值为新的 AgentHistoryList 实例
-		this.lastPlan = params.lastPlan ?? null; // 默认值为 null
-		this.paused = params.paused ?? false; // 默认值为 false
-		this.stopped = params.stopped ?? false; // 默认值为 false
+		this.agentId = params.agentId ?? uuid();
+		this.nSteps = params.nSteps ?? 1;
+		this.consecutiveFailures = params.consecutiveFailures ?? 0;
+		this.lastResult = params.lastResult ?? null;
+		this.history = params.history ?? new AgentHistoryList([]);
+		this.lastPlan = params.lastPlan ?? null;
+		this.paused = params.paused ?? false;
+		this.stopped = params.stopped ?? false;
 		this.messageManagerState =
-			params.messageManagerState ?? new MessageManagerState(); // 默认值为新的 MessageManagerState 实例
+			params.messageManagerState ?? new MessageManagerState();
 	}
 }
 
@@ -313,17 +256,14 @@ class AgentOutput {
 						if (this.action[i]!.hasOwnProperty(key)) {
 							this.action[i]![key] = llmAction[key];
 						} else {
-							// 如果 A 中没有该键，也可以选择添加
 							this.action[i]![key] = llmAction[key];
 						}
 					}
 
 					for (const key in this.action[i]!) {
 						if (outputAction[i]!.hasOwnProperty(key)) {
-							// 如果 B 中有对应的键，则覆盖
 							this.action[i]![key] = outputAction[i]![key];
 						} else {
-							// 如果 B 中没有对应的键，则设置为 undefined
 							this.action[i]![key] = undefined;
 						}
 					}

@@ -20,24 +20,19 @@ export function extractJsonFromModelOutput(
 	try {
 		let cleanedContent = content;
 
-		// 完整重写JSON提取逻辑
 		if (content.includes("```json")) {
-			// 提取```json和```之间的内容
+			// extract the content between ```json and ```
 			const matches = content.match(/```json\s*([\s\S]*?)\s*```/);
 			if (matches && matches[1]) {
 				cleanedContent = matches[1].trim();
 			}
 		} else if (content.includes("```")) {
-			// 尝试提取```和```之间的内容(可能是无标签的JSON)
+			// try to extract the content between ``` and ```
 			const matches = content.match(/```\s*([\s\S]*?)\s*```/);
 			if (matches && matches[1]) {
 				cleanedContent = matches[1].trim();
 			}
 		}
-
-		logger.info(
-			"---extractJsonFromModelOutput cleanedContent:" + cleanedContent,
-		);
 		return JSON.parse(cleanedContent);
 	} catch (e: any) {
 		logger.warn("Failed to parse model output", e);

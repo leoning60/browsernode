@@ -1180,13 +1180,6 @@ export class Agent<T = Context> {
 		return action;
 	}
 
-	/**		"""
-		Load history from file and rerun it.
-
-		Args:
-		history_file: Path to the history file
-		options: Additional arguments passed to rerun_history
-	""" */
 	async loadAndRerun(
 		historyFile?: string | typeof path,
 		options: any = {},
