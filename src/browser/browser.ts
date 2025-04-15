@@ -76,13 +76,8 @@ export class Browser {
 	public config: BrowserConfig;
 	public playwrightBrowser: PlaywrightBrowser | null = null;
 	public disableSecurityArgs: string[] = [];
-	public logger = winston.createLogger({
-		level: "info",
-		format: winston.format.combine(
-			winston.format.label({ label: "browser_node/browser/browser" }),
-			winston.format.json(),
-		),
-		transports: [new winston.transports.Console()],
+	public logger = bnLogger.child({
+		module: "browser_node/browser/browser",
 	});
 
 	constructor(config: BrowserConfig = new BrowserConfig()) {

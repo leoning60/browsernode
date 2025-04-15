@@ -7,19 +7,10 @@ import {
 	SystemMessage,
 	ToolMessage,
 } from "@langchain/core/messages";
-import winston from "winston";
+import bnLogger from "../../logging_config";
 
-const logger = winston.createLogger({
-	level: "debug",
-	format: winston.format.combine(
-		winston.format.label({ label: "browser_node/agent/message_manager/utils" }),
-		winston.format.timestamp(),
-		winston.format.errors({ stack: true }),
-		winston.format.printf(({ level, message, timestamp, stack }) => {
-			return `${timestamp} [${level}]: ${message}${stack ? `\n${stack}` : ""}`;
-		}),
-	),
-	transports: [new winston.transports.Console()],
+const logger = bnLogger.child({
+	module: "browser_node/agent/message_manager/utils",
 });
 
 // Extract JSON from model output

@@ -88,7 +88,6 @@ export class DomService {
 				})()`,
 				args,
 			)) as any;
-			console.log("---evalPage---:", evalPage);
 
 			// Only log performance metrics in debug mode
 			if (debugMode && "perfMetrics" in evalPage) {
@@ -109,32 +108,16 @@ export class DomService {
 	private async constructDomTree(
 		evalPage: any,
 	): Promise<[DOMElementNode, SelectorMap]> {
-		console.log(
-			"constructDomTree - Starting with evalPage:",
-			JSON.stringify(evalPage, null, 2),
-		);
 		const jsNodeMap = evalPage.map;
-		console.log(
-			"constructDomTree - jsNodeMap:",
-			JSON.stringify(jsNodeMap, null, 2),
-		);
+
 		const jsRootId = evalPage["rootId"];
-		console.log("constructDomTree - jsRootId:", jsRootId);
 
 		const selectorMap: SelectorMap = {};
 		const nodeMap: Record<string, DOMBaseNode> = {};
 
 		for (const [id, nodeData] of Object.entries(jsNodeMap)) {
-			console.log(
-				`constructDomTree - Processing node ${id}:`,
-				JSON.stringify(nodeData, null, 2),
-			);
 			try {
 				const result = this.parseNode(nodeData as any);
-				console.log(
-					`constructDomTree - parseNode result for node ${id}:`,
-					result,
-				);
 				if (!Array.isArray(result) || result.length !== 2) {
 					logger.warn(
 						`Invalid result from parseNode for node ${id}: ${result}`,
@@ -143,51 +126,33 @@ export class DomService {
 				}
 				const [node, childrenIds] = result;
 				if (!node) {
-					console.log(`constructDomTree - Node ${id} is null, skipping`);
 					continue;
 				}
 
 				nodeMap[id] = node;
-				console.log(`constructDomTree - Added node ${id} to nodeMap`);
 
 				if (
 					node instanceof DOMElementNode &&
 					typeof node.highlightIndex === "number"
 				) {
 					selectorMap[node.highlightIndex] = node;
-					console.log(
-						`constructDomTree - Added node to selectorMap with index ${node.highlightIndex}`,
-					);
 				}
 
 				// NOTE: We know that we are building the tree bottom up
 				//       and all children are already processed.
 				if (node instanceof DOMElementNode) {
-					console.log(
-						`constructDomTree - Processing children for node ${id}, children:`,
-						childrenIds,
-					);
 					for (const childId of childrenIds) {
 						if (!(childId in nodeMap)) {
-							console.log(
-								`constructDomTree - Child ${childId} not in nodeMap, skipping`,
-							);
 							continue;
 						}
 
 						const childNode = nodeMap[childId.toString()];
 						if (!childNode) {
-							console.log(
-								`constructDomTree - Child node ${childId} is null, skipping`,
-							);
 							continue;
 						}
 
 						childNode.parent = node;
 						node.children.push(childNode);
-						console.log(
-							`constructDomTree - Added child ${childId} to node ${id}`,
-						);
 					}
 				}
 			} catch (e: any) {
@@ -198,16 +163,8 @@ export class DomService {
 		}
 
 		const htmlToDict = nodeMap[jsRootId.toString()];
-		console.log(
-			`constructDomTree - Retrieved root node with ID ${jsRootId}:`,
-			htmlToDict,
-		);
 
 		if (!htmlToDict || !(htmlToDict instanceof DOMElementNode)) {
-			console.log(
-				`constructDomTree - Failed to find root node. nodeMap:`,
-				Object.keys(nodeMap),
-			);
 			throw new Error("Failed to parse HTML to dictionary");
 		}
 
@@ -215,20 +172,12 @@ export class DomService {
 	}
 
 	private parseNode(nodeData: any): [DOMBaseNode | null, number[]] {
-		console.log(
-			"parseNode - Starting with nodeData:",
-			JSON.stringify(nodeData, null, 2),
-		);
 		if (!nodeData) {
-			console.log(
-				"parseNode - nodeData is null or undefined, returning [null, []]",
-			);
 			return [null, []];
 		}
 
 		// Process text nodes immediately
 		if (nodeData.type === "TEXT_NODE") {
-			console.log("parseNode - Processing TEXT_NODE");
 			const textNode = new DOMTextNode(nodeData.isVisible, null, nodeData.text);
 			return [textNode, []];
 		}
@@ -246,33 +195,15 @@ export class DomService {
 					width: viewport.width || 0,
 					height: viewport.height || 0,
 				};
-				console.log("parseNode - Set viewportInfo:", viewportInfo);
 			}
 
 			if ("viewportCoordinates" in nodeData && nodeData.viewportCoordinates) {
 				viewportCoordinates = nodeData.viewportCoordinates;
-				console.log(
-					"parseNode - Set viewportCoordinates:",
-					viewportCoordinates,
-				);
 			}
 
 			if ("pageCoordinates" in nodeData && nodeData.pageCoordinates) {
 				pageCoordinates = nodeData.pageCoordinates;
-				console.log("parseNode - Set pageCoordinates:", pageCoordinates);
 			}
-
-			console.log("parseNode - Creating DOMElementNode with parameters:", {
-				isVisible: nodeData.isVisible || false,
-				tagName: nodeData.tagName,
-				xpath: nodeData.xpath,
-				attributes: nodeData.attributes || {},
-				isInteractive: nodeData.isInteractive || false,
-				isTopElement: nodeData.isTopElement || false,
-				isInViewport: nodeData.isInViewport || false,
-				shadowRoot: nodeData.shadowRoot || false,
-				highlightIndex: nodeData.highlightIndex,
-			});
 
 			const elementNode = new DOMElementNode(
 				nodeData.isVisible || false,
@@ -291,24 +222,15 @@ export class DomService {
 				viewportInfo,
 			);
 			if (!(elementNode instanceof DOMBaseNode)) {
-				console.log(
-					"parseNode - Created node is not an instance of DOMBaseNode:",
-					elementNode,
-				);
 				logger.warn(
 					`Invalid node created for data: ${JSON.stringify(nodeData)}`,
 				);
 				return [null, []];
 			}
 			const childrenIds = nodeData.children || [];
-			console.log(
-				"parseNode - Successfully created element node, returning with children:",
-				childrenIds,
-			);
 
 			return [elementNode, childrenIds];
 		} catch (e: any) {
-			console.log("parseNode - Error occurred:", e, "Stack:", e.stack);
 			logger.error(`Error parsing node: ${e}`);
 			logger.error(`Error parsing node stack: ${e.stack}`);
 			return [null, []];

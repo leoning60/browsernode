@@ -288,53 +288,10 @@ class AgentOutput {
 		this.action = action;
 	}
 
-	static typeWithCustomActionsZod(
-		actions: Map<string, RegisteredAction>,
-		includeActions: string[],
-		customActions: z.ZodObject<any>,
-	): z.ZodType<any> {
-		const fields: Record<string, z.ZodOptional<any>> = {};
-
-		for (const [name, action] of actions.entries()) {
-			if (includeActions === undefined || includeActions.includes(name)) {
-				// 每个字段是可选的，使用 param_model 并添加描述
-				fields[name] = z
-					.object(action.paramModel)
-					.optional()
-					.describe(action.description);
-			}
-		}
-		const actionSchema = z.object(fields);
-		// 创建一个有效的 Zod schema
-		const schema = z.object({
-			currentState: AgentBrainSchema.describe("Current state"),
-			action: z
-				.array(customActions)
-				.min(1, { message: "At least one action is required" })
-				.describe("List of actions to execute"),
-		});
-		return schema;
-	}
 	static typeWithCustomActions(customActions: ActionModel): typeof AgentOutput {
-		// We need to return a type/class, not an instance
-		// Define a new class that extends AgentOutput
 		return class CustomAgentOutput extends AgentOutput {
 			constructor(currentState: AgentBrain, outputAction: ActionModel[]) {
-				super(currentState, outputAction); //这是传入的数据
-				// Create proper ActionModel instances by cloning custom_actions
-				console.log("customActions", customActions);
-				console.log("outputAction", outputAction);
-				// this.action = [customActions];
-				// this.action = outputAction.map(() =>
-				// 	Object.create(
-				// 		Object.getPrototypeOf(customActions),
-				// 		Object.getOwnPropertyDescriptors(customActions),
-				// 	),
-				// );
-				// 这个表达式使每个数组元素都指向同一个 customActions 对象的引用。
-				//错误做法， 在 JavaScript/TypeScript 中，对象是引用类型，所以对一个引用的修改会影响到所有使用该引用的地方。
-
-				//正确做法，每个元素都是新的对象
+				super(currentState, outputAction);
 				this.action =
 					outputAction.length > 0
 						? outputAction.map(() => {
@@ -349,8 +306,6 @@ class AgentOutput {
 									Object.getOwnPropertyDescriptors(customActions),
 								),
 							];
-
-				// TODO: 需要优化.应该list生成list，目前list合到一个this.action[0]了
 
 				for (let i = 0; i < outputAction.length; i++) {
 					const llmAction = outputAction[i];

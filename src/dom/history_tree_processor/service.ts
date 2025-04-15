@@ -4,22 +4,13 @@ import { createHash } from "crypto"; // Node.js crypto module
 // import { sha256 } from 'js-sha256';
 
 import winston from "winston";
+import bnLogger from "../../logging_config";
 import { DOMElementNode } from "../views";
 import type { CoordinateSet, HashedDomElement, ViewportInfo } from "./view";
 import { DOMHistoryElement } from "./view";
-const logger = winston.createLogger({
-	level: "info",
-	format: winston.format.combine(
-		winston.format.label({
-			label: "browser_node/dom/history_tree_processor/service",
-		}),
-		winston.format.timestamp(),
-		winston.format.errors({ stack: true }),
-		winston.format.printf(({ level, message, timestamp, stack }) => {
-			return `${timestamp} [${level}]: ${message}${stack ? `\n${stack}` : ""}`;
-		}),
-	),
-	transports: [new winston.transports.Console()],
+
+const logger = bnLogger.child({
+	module: "browser_node/dom/history_tree_processor/service",
 });
 
 class BrowserContext {

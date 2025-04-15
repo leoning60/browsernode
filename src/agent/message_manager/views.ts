@@ -6,21 +6,12 @@ import {
 	ToolMessage,
 } from "@langchain/core/messages";
 import winston from "winston";
+import bnLogger from "../../logging_config";
 
-const logger = winston.createLogger({
-	level: "info",
-	format: winston.format.combine(
-		winston.format.label({
-			label: "browser_node/agent/message_manager/views",
-		}),
-		winston.format.timestamp(),
-		winston.format.errors({ stack: true }),
-		winston.format.printf(({ level, message, timestamp, stack }) => {
-			return `${timestamp} [${level}]: ${message}${stack ? `\n${stack}` : ""}`;
-		}),
-	),
-	transports: [new winston.transports.Console()],
+const logger = bnLogger.child({
+	module: "browser_node/agent/message_manager/views",
 });
+
 class MessageMetadata {
 	/** Metadata for a message */
 	tokens: number = 0;

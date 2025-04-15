@@ -6,19 +6,12 @@ import type {
 	DOMTextNode,
 	SelectorMap,
 } from "../dom/views";
+import bnLogger from "../logging_config";
 
-const logger = winston.createLogger({
-	level: "info",
-	format: winston.format.combine(
-		winston.format.label({ label: "browser_node/browser/views" }),
-		winston.format.timestamp(),
-		winston.format.errors({ stack: true }),
-		winston.format.printf(({ level, message, timestamp, stack }) => {
-			return `${timestamp} [${level}]: ${message}${stack ? `\n${stack}` : ""}`;
-		}),
-	),
-	transports: [new winston.transports.Console()],
+const logger = bnLogger.child({
+	module: "browser_node/browser/views",
 });
+
 export class TabInfo {
 	// Represents information about a browser tab
 	constructor(
