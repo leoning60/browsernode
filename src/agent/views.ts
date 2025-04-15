@@ -1,9 +1,7 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { v4 as uuid } from "uuid";
-import winston from "winston";
+import { Logger } from "winston";
 import { z } from "zod";
-
-import type { A } from "vitest/dist/chunks/reporters.d.CqBhtcTq.js";
 import { MessageManagerState } from "../agent/message_manager/views";
 import type { BrowserStateHistory } from "../browser/views";
 import type {
@@ -29,37 +27,24 @@ type ToolCallingMethod =
 	| "auto";
 
 // Configure Winston logger
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/agent/views",
 });
 
 class AgentSettings {
 	useVision: boolean = true;
-
 	useVisionForPlanner: boolean = false;
-
 	saveConversationPath?: string;
-
 	saveConversationPathEncoding?: string = "utf-8";
-
 	maxFailures: number = 1;
-
 	retryDelay: number = 10;
-
 	maxInputTokens: number = 128000;
-
 	validateOutput: boolean = false;
-
 	messageContext?: string;
-
 	generateGif: boolean | string = false;
-
 	availableFilePaths?: string[];
-
 	overrideSystemMessage?: string;
-
 	extendSystemMessage?: string;
-
 	includeAttributes: string[] = [
 		"title",
 		"type",
@@ -74,13 +59,9 @@ class AgentSettings {
 	];
 
 	maxActionsPerStep: number = 10;
-
 	toolCallingMethod?: ToolCallingMethod = "auto";
-
 	pageExtractionLLM?: BaseChatModel;
-
 	plannerLLM?: BaseChatModel | null;
-
 	plannerInterval: number = 1;
 
 	constructor(settings: Partial<AgentSettings> = {}) {

@@ -1,7 +1,6 @@
-// For hashing (replacing hashlib)
 import { createHash } from "crypto"; // Node.js crypto module
 // If you're in a browser environment, you might need a different crypto library like:
-// import { sha256 } from 'js-sha256';
+// import { sha256 } from "js-sha256";
 
 import winston from "winston";
 import bnLogger from "../../logging_config";

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import winston from "winston";
+import winston, { Logger } from "winston";
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(process.cwd(), "logs");
@@ -12,7 +12,7 @@ if (!fs.existsSync(logsDir)) {
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 const logFilename = path.join(logsDir, `${timestamp}.log`);
 
-const bnLogger = winston.createLogger({
+const bnLogger: Logger = winston.createLogger({
 	level: "debug",
 	format: winston.format.combine(
 		winston.format.label({ label: "browser_node/logging_config" }),

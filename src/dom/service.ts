@@ -11,12 +11,6 @@ const logger = bnLogger.child({
 	module: "browser_node/dom/service",
 });
 
-// interface EvalPageResult {
-// 	map: Record<string, unknown>;
-// 	rootId: number;
-// 	perfMetrics?: Record<string, unknown>;
-// }
-
 export class DomService {
 	private page: Page;
 	private xpathCache: Record<string, any> = {};

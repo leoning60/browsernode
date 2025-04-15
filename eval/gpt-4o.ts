@@ -21,6 +21,6 @@ async function runAgent(task: string, max_steps: number = 38) {
 }
 
 const task =
-	"Go to https://www.google.com and search for 'python' and click on the first result";
+	"Go to https://www.google.com and search for 'node.js' and click on the first result";
 const result = await runAgent(task);
 console.log(result);

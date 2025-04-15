@@ -1,12 +1,8 @@
-import { promises as fs } from "fs";
-import path from "path";
 import sharp from "sharp";
-import { BrowserStateHistory } from "../browser/views";
-
-import winston from "winston";
+import { Logger } from "winston";
 import bnLogger from "../logging_config";
 
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/agent/gif",
 });
 

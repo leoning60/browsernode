@@ -5,10 +5,10 @@ import {
 	SystemMessage,
 	ToolMessage,
 } from "@langchain/core/messages";
-import winston from "winston";
+import { Logger } from "winston";
 import bnLogger from "../../logging_config";
 
-const logger = bnLogger.child({
+const logger: Logger = bnLogger.child({
 	module: "browser_node/agent/message_manager/views",
 });
 

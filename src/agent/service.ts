@@ -329,7 +329,7 @@ export class Agent<T = Context> {
 	}
 
 	/**
-	 * Get the version and source of the browser-use package (git or pip in a nutshell)
+	 * Get the version and source of the browser-node package (git or pip in a nutshell)
 	 */
 	private setBrowserUseVersionAndSource(): void {
 		try {
@@ -634,7 +634,6 @@ export class Agent<T = Context> {
 
 			this.state.consecutiveFailures += 1;
 		} else {
-			// Handle rate limit errors - assuming they follow similar patterns to Python
 			if (
 				error.message.includes("RateLimit") ||
 				error.message.includes("ResourceExhausted")
@@ -755,7 +754,6 @@ export class Agent<T = Context> {
 
 			// Then get the structured response
 			const response = await structuredLLM.invoke(inputMessages);
-			logger.debug("---getNextAction response---:", response);
 			if (
 				!response ||
 				typeof response !== "object" ||

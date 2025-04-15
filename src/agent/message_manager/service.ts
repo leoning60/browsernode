@@ -8,11 +8,10 @@ import {
 import winston from "winston";
 
 import { modelDump } from "../../bn_utils";
-import type { BrowserState } from "../../browser/views";
 import bnLogger from "../../logging_config";
-import { timeExecution, timeExecutionSync } from "../../utils";
+import { timeExecution } from "../../utils";
 import { AgentMessagePrompt } from "../prompt";
-import type { ActionResult, AgentOutput } from "../views";
+import type { AgentOutput } from "../views";
 import { MessageManagerState } from "./views";
 
 // Create logger
