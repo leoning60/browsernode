@@ -707,7 +707,7 @@ export class Agent<T = Context> {
 		inputMessages: BaseMessage[],
 	): Promise<AgentOutput> {
 		inputMessages = this.convertInputMessages(inputMessages);
-		let parsed: AgentOutput | null = null;
+		let parsed: AgentOutput;
 
 		if (this.toolCallingMethod === "raw") {
 			const output = await this.llm.invoke(inputMessages);
@@ -715,10 +715,10 @@ export class Agent<T = Context> {
 			output.content = cleanedContent;
 
 			try {
-				const parsed_json = extractJsonFromModelOutput(String(output.content));
-				return new this.AgentOutput(
-					parsed_json.currentState,
-					parsed_json.action,
+				const parsedJson = extractJsonFromModelOutput(String(output.content));
+				parsed = new this.AgentOutput(
+					parsedJson.currentState,
+					parsedJson.action,
 				);
 			} catch (e) {
 				logger.warn("Failed to parse model output", e);
@@ -729,71 +729,76 @@ export class Agent<T = Context> {
 				includeRaw: true,
 			});
 			const response = await structuredLLM.invoke(inputMessages);
-			const parsed = response.parsed as AgentOutput;
-
-			if (!parsed) {
-				throw new Error("Could not parse response.");
-			}
-
-			return parsed;
+			const parsedJson = this.parseResponseJson(response);
+			parsed = new this.AgentOutput(parsedJson.currentState, parsedJson.action);
 		} else {
 			const agentOutputSchema = this.AgentOutput.schemaWithCustomActions(
 				this.ActionModel,
 			);
-
 			const structuredLLM = this.llm.withStructuredOutput(agentOutputSchema, {
 				includeRaw: true,
 				method: this.toolCallingMethod,
 			});
-
 			const response = await structuredLLM.invoke(inputMessages);
-			if (
-				!response ||
-				typeof response !== "object" ||
-				!("parsed" in response) ||
-				!("raw" in response)
-			) {
-				throw new Error("Failed to get LLM Response");
-			}
-
-			let parsedJson;
-			if (response.parsed && response.parsed.action) {
-				parsedJson = response.parsed;
-			}
-			// Fix for when tool_calls exist but parsed is null
-			if (
-				!response.parsed &&
-				response.raw &&
-				response.raw.additional_kwargs &&
-				response.raw.additional_kwargs.tool_calls &&
-				response.raw.additional_kwargs.tool_calls.length > 0
-			) {
-				const toolCall = response.raw.additional_kwargs.tool_calls[0];
-				if (toolCall && toolCall.function && toolCall.function.arguments) {
-					try {
-						const removeEscapeCharactersParsedJson =
-							toolCall.function.arguments.replace(/\\(.)/g, "$1");
-						parsedJson = JSON.parse(removeEscapeCharactersParsedJson);
-					} catch (e) {
-						logger.warn("Failed to parse tool call arguments as JSON", e);
-					}
+			const parsedJson = this.parseResponseJson(response);
+			parsed = new this.AgentOutput(parsedJson.currentState, parsedJson.action);
+		}
+		if (parsed === null) {
+			throw new Error("Could not parse response.");
+		}
+		// cut the number of actions to max_actions_per_step if needed
+		if (parsed.action.length > this.settings.maxActionsPerStep) {
+			parsed.action = parsed.action.slice(0, this.settings.maxActionsPerStep);
+		}
+		logResponse(parsed);
+		return parsed;
+	}
+	/**
+	 * Parse the JSON response from the LLM
+	 * @private
+	 * @param response - The response from the LLM
+	 * @returns The parsed JSON or null if parsing fails
+	 */
+	private parseResponseJson(response: any): any {
+		if (
+			!response ||
+			typeof response !== "object" ||
+			!("parsed" in response) ||
+			!("raw" in response)
+		) {
+			throw new Error("Failed to get LLM Response");
+		}
+		let parsedJson;
+		if (response.parsed && response.parsed.action) {
+			parsedJson = response.parsed;
+		}
+		// Fix for when tool_calls exist but parsed is null
+		if (
+			!response.parsed &&
+			response.raw &&
+			response.raw.additional_kwargs &&
+			response.raw.additional_kwargs.tool_calls &&
+			response.raw.additional_kwargs.tool_calls.length > 0
+		) {
+			const toolCall = response.raw.additional_kwargs.tool_calls[0];
+			if (toolCall && toolCall.function && toolCall.function.arguments) {
+				try {
+					const removeEscapeCharactersParsedJson =
+						toolCall.function.arguments.replace(/\\(.)/g, "$1");
+					parsedJson = JSON.parse(removeEscapeCharactersParsedJson);
+				} catch (e) {
+					logger.warn("Failed to parse tool call arguments as JSON", e);
 				}
 			}
-			if (!parsedJson && response.raw.content) {
-				parsedJson = extractJsonFromModelOutput(String(response.raw.content));
-			}
-			if (!parsedJson) {
-				throw new Error("Failed to parse LLM Response to tool call arguments");
-			}
-			const parsedAgentOutput = new this.AgentOutput(
-				parsedJson.currentState,
-				parsedJson.action,
-			);
-			logResponse(parsedAgentOutput);
-			return parsedAgentOutput;
 		}
+		if (!parsedJson && response.raw.content) {
+			parsedJson = extractJsonFromModelOutput(String(response.raw.content));
+		}
+		if (!parsedJson) {
+			throw new Error("Failed to parse LLM Response to tool call arguments");
+		}
+		return parsedJson;
 	}
-
 	/**
 	 * Log the agent run
 	 */
