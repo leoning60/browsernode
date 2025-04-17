@@ -517,7 +517,7 @@ export class BrowserContext {
 			await this.checkAndHandleNavigation(page);
 		} catch (e) {
 			if (e instanceof URLNotAllowedError) throw e;
-			logger.warning("Page load failed, continuing...");
+			logger.warn("Page load failed, continuing...");
 		}
 		const elapsed = (Date.now() - startTime) / 1000;
 		const remaining = Math.max(
@@ -550,7 +550,7 @@ export class BrowserContext {
 
 	private async checkAndHandleNavigation(page: Page): Promise<void> {
 		if (!this.isUrlAllowed(page.url())) {
-			logger.warning(`Navigation to non-allowed URL detected: ${page.url}`);
+			logger.warn(`Navigation to non-allowed URL detected: ${page.url}`);
 			try {
 				await this.goBack();
 			} catch (e) {
@@ -1112,7 +1112,7 @@ export class BrowserContext {
 				);
 				// Note: File system operations require Node.js fs.promises or similar, omitted here
 			} catch (e) {
-				logger.warning(`Failed to save cookies: ${e}`);
+				logger.warn(`Failed to save cookies: ${e}`);
 			}
 		}
 	}

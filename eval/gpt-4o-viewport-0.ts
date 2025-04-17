@@ -1,6 +1,10 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { Agent, Browser, BrowserConfig } from "browser-node";
-import { BrowserContextConfig } from "../src/browser/context";
+import {
+	Agent,
+	Browser,
+	BrowserConfig,
+	BrowserContextConfig,
+} from "browser-node";
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {

@@ -1,7 +1,6 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
 import { Agent } from "browser-node";
-// import { Agent } from "../src/agent/service";
 
 const llm = new ChatOpenAI({
 	modelName: "gpt-4o-mini",
