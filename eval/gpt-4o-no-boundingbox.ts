@@ -1,5 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { Agent } from "browser-node";
+import { Agent, Browser, BrowserConfig } from "browser-node";
+import { BrowserContextConfig } from "../src/browser/context";
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {
@@ -19,7 +20,14 @@ async function runAgent(task: string, max_steps: number = 38) {
 			},
 		},
 	});
-	const agent = new Agent(task, llm);
+	const browser = new Browser(
+		new BrowserConfig(
+			new BrowserContextConfig({
+				highlightElements: false,
+			}),
+		),
+	);
+	const agent = new Agent(task, llm, { browser });
 	const result = await agent.run(max_steps);
 	return result;
 }
@@ -28,5 +36,8 @@ if (require.main === module) {
 	const task =
 		"Go to https://www.google.com and search for 'node.js' and click on the first result";
 	const result = await runAgent(task);
-	console.log("eval/gpt-4o.ts result:", JSON.stringify(result, null, 2));
+	console.log(
+		"eval/gpt-4o-no-boundingbox.ts result:",
+		JSON.stringify(result, null, 2),
+	);
 }

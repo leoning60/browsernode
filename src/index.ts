@@ -7,5 +7,5 @@ export {
 	AgentHistoryList,
 } from "./agent/views";
 export { Browser, BrowserConfig } from "./browser/browser";
-export { BrowserContext } from "./browser/context";
+export { BrowserContext, BrowserContextConfig } from "./browser/context";
 export { Controller } from "./controller/service";

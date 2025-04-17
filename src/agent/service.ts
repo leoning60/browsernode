@@ -707,10 +707,10 @@ export class Agent<T = Context> {
 		inputMessages: BaseMessage[],
 	): Promise<AgentOutput> {
 		inputMessages = this.convertInputMessages(inputMessages);
+		let parsed: AgentOutput | null = null;
 
 		if (this.toolCallingMethod === "raw") {
 			const output = await this.llm.invoke(inputMessages);
-			// Clean up think tags if present
 			const cleanedContent = this.removeThinkTags(String(output.content));
 			output.content = cleanedContent;
 
@@ -746,7 +746,6 @@ export class Agent<T = Context> {
 				method: this.toolCallingMethod,
 			});
 
-			// Then get the structured response
 			const response = await structuredLLM.invoke(inputMessages);
 			if (
 				!response ||
@@ -794,6 +793,7 @@ export class Agent<T = Context> {
 			return parsedAgentOutput;
 		}
 	}
+
 	/**
 	 * Log the agent run
 	 */

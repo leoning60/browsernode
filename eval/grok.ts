@@ -1,22 +1,18 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { Agent } from "browser-node";
 
-const apiKey = process.env.OPENAI_API_KEY;
+const apiKey = process.env.GROK_API_KEY;
 if (!apiKey) {
-	throw new Error("OPENAI_API_KEY is not set");
+	throw new Error("GROK_API_KEY is not set");
 }
 
 async function runAgent(task: string, max_steps: number = 38) {
 	const llm = new ChatOpenAI({
-		modelName: "gpt-4o-mini",
+		modelName: "grok-2-1212",
 		temperature: 0.0,
 		openAIApiKey: apiKey,
 		configuration: {
-			baseURL: "https://openrouter.ai/api/v1", //if you want to use openrouter.ai, you can set the baseURL to the openrouter.ai API URL
-			defaultHeaders: {
-				"HTTP-Referer": null, // Optional. Site URL for rankings on openrouter.ai.
-				"X-Title": null, // Optional. Site title for rankings on openrouter.ai.
-			},
+			baseURL: "https://api.x.ai/v1", //if you want to use openrouter.ai, you can set the baseURL to the openrouter.ai API URL
 		},
 	});
 	const agent = new Agent(task, llm);

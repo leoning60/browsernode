@@ -1,5 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { Agent } from "browser-node";
+import { Agent, Browser, BrowserContextConfig } from "browser-node";
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {
@@ -19,14 +19,31 @@ async function runAgent(task: string, max_steps: number = 38) {
 			},
 		},
 	});
-	const agent = new Agent(task, llm);
-	const result = await agent.run(max_steps);
-	return result;
+
+	// Create a browser instance first, then create a context from it
+	const browser = new Browser();
+	const context = await browser.newContext(
+		new BrowserContextConfig({
+			tracePath: "./tmp/traces/",
+		}),
+	);
+
+	try {
+		const agent = new Agent(task, llm, { browserContext: context });
+		const result = await agent.run(max_steps);
+		return result;
+	} finally {
+		// Make sure to close the context and browser when done
+		await context.close();
+		await browser.close();
+	}
 }
 
 if (require.main === module) {
-	const task =
-		"Go to https://www.google.com and search for 'node.js' and click on the first result";
+	const task = "NVIDIA stock price";
 	const result = await runAgent(task);
-	console.log("eval/gpt-4o.ts result:", JSON.stringify(result, null, 2));
+	console.log(
+		"example/features/save_trace.ts result:",
+		JSON.stringify(result, null, 2),
+	);
 }

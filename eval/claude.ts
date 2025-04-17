@@ -1,16 +1,11 @@
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatAnthropic } from "@langchain/anthropic";
 import { Agent } from "browser-node";
 
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) {
-	throw new Error("OPENAI_API_KEY is not set");
-}
-
 async function runAgent(task: string, max_steps: number = 38) {
-	const llm = new ChatOpenAI({
-		modelName: "gpt-4o-mini",
+	const llm = new ChatAnthropic({
+		modelName: "claude-3-5-sonnet-20240620",
 		temperature: 0.0,
-		openAIApiKey: apiKey,
+		anthropicApiKey: process.env.ANTHROPIC_API_KEY,
 		configuration: {
 			baseURL: "https://openrouter.ai/api/v1", //if you want to use openrouter.ai, you can set the baseURL to the openrouter.ai API URL
 			defaultHeaders: {
