@@ -153,7 +153,6 @@ export class Browser {
 			throw new Error("Chrome instance path is required");
 		}
 
-		// 检查Chrome实例是否已经运行
 		const checkChromeInstance = (): Promise<boolean> => {
 			return new Promise((resolve) => {
 				const req = http.get(
@@ -177,13 +176,17 @@ export class Browser {
 				});
 			});
 		};
-
 		try {
 			// 检查浏览器是否已经运行
 			const chromeRunning = await checkChromeInstance();
 			if (chromeRunning) {
 				this.logger.info("Reusing existing Chrome instance");
-				return browser.connectOverCDP("http://localhost:9222");
+				return browser.connectOverCDP({
+					wsEndpoint: await this.chromeJsonVersionInfo(
+						"http://localhost:9222/json/version",
+					).then((res) => res.versionInfo?.webSocketDebuggerUrl),
+					timeout: 20000, //20 second timeout for connection
+				});
 			}
 		} catch (error) {
 			this.logger.debug(
@@ -218,13 +221,58 @@ export class Browser {
 
 		// 连接到新实例
 		try {
-			return browser.connectOverCDP("http://localhost:9222");
+			return browser.connectOverCDP({
+				wsEndpoint: await this.chromeJsonVersionInfo(
+					"http://localhost:9222/json/version",
+				).then((res) => res.versionInfo?.webSocketDebuggerUrl),
+				timeout: 20000, //20 second timeout for connection
+			});
 		} catch (error) {
 			this.logger.error(`Failed to start a new Chrome instance: ${error}`);
 			throw new Error(
 				"To start Chrome in Debug mode, you need to close all existing Chrome instances and try again otherwise we cannot connect to the instance.",
 			);
 		}
+	}
+	private async chromeJsonVersionInfo(
+		url: "http://localhost:9222/json/version",
+	): Promise<{
+		running: boolean;
+		versionInfo?: Record<string, string>;
+	}> {
+		return new Promise((resolve) => {
+			let responseData = "";
+			let req = http.get(url, (res: http.IncomingMessage) => {
+				if (res.statusCode === 200) {
+					res.on("data", (chunk) => {
+						responseData += chunk;
+					});
+
+					res.on("end", () => {
+						try {
+							const versionInfo = JSON.parse(responseData);
+							resolve({
+								running: true,
+								versionInfo: versionInfo,
+							});
+						} catch (error) {
+							resolve({ running: true });
+						}
+					});
+				} else {
+					resolve({ running: false });
+				}
+			});
+
+			req.on("error", () => {
+				resolve({ running: false });
+			});
+
+			req.setTimeout(2000, () => {
+				req.destroy();
+				resolve({ running: false });
+			});
+		});
 	}
 
 	private async setupStandardBrowser(
