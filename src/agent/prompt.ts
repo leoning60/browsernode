@@ -1,17 +1,20 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 import { readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { BrowserState } from "../browser/views";
 
 import { ActionResult, AgentStepInfo } from "./views";
 
 import bnLogger from "../logging_config";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const logger = bnLogger.child({
 	module: "browser_node/agent/prompt",
 });
-
 export class SystemPrompt {
 	public defaultActionDescription: string;
 	public maxActionsPerStep: number = 10;

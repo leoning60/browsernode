@@ -1,12 +1,17 @@
 import fs from "fs";
-import path from "path";
+import path, { dirname } from "path";
 import type { Page } from "playwright";
 import { DOMBaseNode, DOMElementNode, DOMState, DOMTextNode } from "./views";
 import type { SelectorMap } from "./views";
 
+import { fileURLToPath } from "url";
 import bnLogger from "../logging_config";
 import { timeExecution } from "../utils";
 import type { ViewportInfo } from "./history_tree_processor/view";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const logger = bnLogger.child({
 	module: "browser_node/dom/service",
 });
