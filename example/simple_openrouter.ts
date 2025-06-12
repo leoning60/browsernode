@@ -6,7 +6,14 @@ const llm = new ChatOpenAI({
 	modelName: "gpt-4o",
 	temperature: 0.0,
 	streaming: true,
-	openAIApiKey: process.env.OPENAI_API_KEY,
+	openAIApiKey: process.env.OPENROUTER_API_KEY,
+	configuration: {
+		baseURL: "https://openrouter.ai/api/v1",
+		defaultHeaders: {
+			"HTTP-Referer": null, // Optional. Site URL for rankings on openrouter.ai.
+			"X-Title": null, // Optional. Site title for rankings on openrouter.ai.
+		},
+	},
 });
 
 const task = "Search for the latest tesla stock price";

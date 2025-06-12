@@ -1,18 +1,11 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { Agent } from "browser-node";
+import { Agent } from "browsernode";
 
 async function runAgent(task: string, max_steps: number = 38) {
 	const llm = new ChatOpenAI({
-		modelName: "gpt-4o-mini",
+		modelName: "gpt-4o",
 		temperature: 0.0,
 		openAIApiKey: process.env.OPENAI_API_KEY,
-		configuration: {
-			baseURL: "https://openrouter.ai/api/v1", //if you want to use openrouter.ai, you can set the baseURL to the openrouter.ai API URL
-			defaultHeaders: {
-				"HTTP-Referer": null, // Optional. Site URL for rankings on openrouter.ai.
-				"X-Title": null, // Optional. Site title for rankings on openrouter.ai.
-			},
-		},
 	});
 	const agent = new Agent(task, llm, {
 		useVision: false,

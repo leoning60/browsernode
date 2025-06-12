@@ -1,5 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { Agent } from "browser-node";
+import { Agent } from "browsernode";
 
 const apiKey = process.env.GROK_API_KEY;
 if (!apiKey) {

@@ -1,5 +1,5 @@
 {
-	"name": "browser-node",
+	"name": "browsernode",
 	"module": "src/index.ts",
 	"type": "module",
 	"main": "src/index.ts",
@@ -12,7 +12,6 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
-		"@types/bun": "latest",
 		"@types/node": "^22.13.13"
 	},
 	"peerDependencies": {
@@ -20,15 +19,14 @@
 	},
 	"dependencies": {
 		"@langchain/core": "^0.3.43",
-		"@types/dotenv": "^8.2.3",
-		"@types/sharp": "^0.32.0",
-		"@types/winston": "^2.4.4",
 		"dotenv": "^16.4.7",
 		"langchain": "^0.3.20",
 		"lefthook": "^1.11.9",
 		"playwright": "^1.51.1",
 		"reflect-metadata": "^0.2.2",
 		"sharp": "^0.33.5",
+		"ts-node": "^10.9.2",
+		"tsx": "^4.19.3",
 		"uuid": "^11.1.0",
 		"vitest": "^3.0.9",
 		"winston": "^3.17.0",

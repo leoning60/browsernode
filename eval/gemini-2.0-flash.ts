@@ -1,5 +1,5 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { Agent } from "browser-node";
+import { Agent } from "browsernode";
 
 const apiKey = process.env.GOOGLE_API_KEY;
 if (!apiKey) {
