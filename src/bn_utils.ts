@@ -1,5 +1,4 @@
 import { z } from "zod";
-
 /**
  * simplify Zod Schema object to readable structure
  * @param schema Zod Schema object

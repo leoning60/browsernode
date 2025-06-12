@@ -323,7 +323,7 @@ export class Agent<T = Context> {
 	}
 
 	/**
-	 * Get the version and source of the browser-node package (git or pip in a nutshell)
+	 * Get the version and source of the browsernode package (git or pip in a nutshell)
 	 */
 	private setBrowserUseVersionAndSource(): void {
 		try {

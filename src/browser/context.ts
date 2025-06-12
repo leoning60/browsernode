@@ -131,7 +131,7 @@ export class BrowserContextConfig {
 		this.locale = params.locale ?? null;
 		this.userAgent =
 			params.userAgent ??
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36";
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 		this.highlightElements = params.highlightElements ?? true;
 		this.viewportExpansion = params.viewportExpansion ?? 500;
 		this.allowedDomains = params.allowedDomains ?? null;
@@ -308,14 +308,19 @@ export class BrowserContext {
 		browser: PlaywrightBrowser,
 	): Promise<PlaywrightBrowserContext> {
 		let context: PlaywrightBrowserContext;
-		if (this.browser.config.cdpUrl && browser.contexts.length > 0) {
+		// When using CDP or an existing Chrome instance, reuse the default context
+		if (this.browser.config.cdpUrl && browser.contexts().length > 0) {
 			context = browser.contexts()[0]!;
+			logger.info("Using existing CDP browser context");
 		} else if (
 			this.browser.config.browserInstancePath &&
-			browser.contexts.length > 0
+			browser.contexts().length > 0
 		) {
 			context = browser.contexts()[0]!;
+			logger.info("Using existing browser instance context");
 		} else {
+			// Only create a new context if we don't have one
+			logger.info("Creating new browser context");
 			context = await browser.newContext({
 				viewport: this.config.browserWindowSize,
 				// noViewport: false,
