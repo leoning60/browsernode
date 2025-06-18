@@ -413,8 +413,14 @@ export class Agent<T = Context> {
 					this.modelName.includes("deepseek-r1"))
 			) {
 				return "raw";
-			} else if (this.chatModelLibrary === "ChatGoogleGenerativeAI") {
-				return undefined;
+			} else if (
+				this.chatModelLibrary === "ChatGoogleGenerativeAI" ||
+				this.isGeminiModel()
+			) {
+				// Use raw mode for Gemini to avoid structured output issues
+				return "raw";
+			} else if (this.chatModelLibrary === "ChatOllama") {
+				return "raw";
 			} else if (this.chatModelLibrary === "ChatOpenAI") {
 				return "functionCalling";
 			} else if (this.chatModelLibrary === "AzureChatOpenAI") {
@@ -711,11 +717,41 @@ export class Agent<T = Context> {
 
 		if (this.toolCallingMethod === "raw") {
 			const output = await this.llm.invoke(inputMessages);
-			const cleanedContent = this.removeThinkTags(String(output.content));
+			console.debug("this.toolCallingMethod === raw,output:", output);
+			// Handle the case where output.content might be an array
+			let contentString: string;
+			if (Array.isArray(output.content)) {
+				// Extract text from array of content objects
+				contentString = output.content
+					.filter((item) => item.type === "text")
+					.map((item: any) => item.text)
+					.join("");
+			} else {
+				contentString = String(output.content);
+			}
+
+			const cleanedContent = this.removeThinkTags(contentString);
 			output.content = cleanedContent;
 
 			try {
-				const parsedJson = extractJsonFromModelOutput(String(output.content));
+				const parsedJson = extractJsonFromModelOutput(cleanedContent);
+
+				// Validate the parsed JSON structure
+				if (!parsedJson || typeof parsedJson !== "object") {
+					throw new Error("Invalid JSON structure");
+				}
+
+				if (
+					!parsedJson.currentState ||
+					typeof parsedJson.currentState !== "object"
+				) {
+					throw new Error("Missing or invalid currentState in parsed JSON");
+				}
+
+				if (!parsedJson.action || !Array.isArray(parsedJson.action)) {
+					throw new Error("Missing or invalid action array in parsed JSON");
+				}
+
 				parsed = new this.AgentOutput(
 					parsedJson.currentState,
 					parsedJson.action,
@@ -787,7 +823,25 @@ export class Agent<T = Context> {
 						toolCall.function.arguments.replace(/\\(.)/g, "$1");
 					parsedJson = JSON.parse(removeEscapeCharactersParsedJson);
 				} catch (e) {
-					logger.warn("Failed to parse tool call arguments as JSON", e);
+					logger.warn(
+						"Failed to parse tool call arguments as JSON, trying extractJsonFromModelOutput",
+						e,
+					);
+					// If the direct JSON.parse fails, try using the enhanced extraction method
+					try {
+						parsedJson = extractJsonFromModelOutput(
+							toolCall.function.arguments,
+						);
+					} catch (extractError) {
+						logger.warn(
+							"Both JSON parsing methods failed for tool call arguments",
+							{
+								originalError: e,
+								extractError: extractError,
+								arguments: toolCall.function.arguments.substring(0, 200), // Log first 200 chars for debugging
+							},
+						);
+					}
 				}
 			}
 		}
@@ -843,8 +897,12 @@ export class Agent<T = Context> {
 
 			// Execute initial actions if provided
 			if (this.initialActions) {
+				logger.info(`Executing ${this.initialActions.length} initial actions`);
 				const result = await this.multiAct(this.initialActions, false);
 				this.state.lastResult = result;
+				logger.info(`Initial actions completed with ${result.length} results`);
+			} else {
+				logger.debug("No initial actions to execute");
 			}
 
 			for (let step = 0; step < maxSteps; step++) {
@@ -1231,19 +1289,32 @@ export class Agent<T = Context> {
 		actions: Record<string, Record<string, any>>[],
 	): ActionModel[] {
 		const convertedActions: ActionModel[] = [];
+		logger.debug(`Converting ${actions.length} initial actions`);
 
 		for (const actionDict of actions) {
 			// Each action_dict should have a single key-value pair
 			const actionName = Object.keys(actionDict)[0];
-			if (!actionName) continue;
+			if (!actionName) {
+				logger.warn("No action name found in action dict");
+				continue;
+			}
 
 			const params = actionDict[actionName];
-			if (!params) continue;
+			if (!params) {
+				logger.warn(`No parameters found for action: ${actionName}`);
+				continue;
+			}
 
 			// Get the parameter model for this action from registry
 			const actionInfo =
 				this.controller.registry.registry.actions.get(actionName);
-			if (!actionInfo) continue;
+			if (!actionInfo) {
+				logger.warn(`Action not found in registry: ${actionName}`);
+				logger.debug(
+					`Available actions: ${Array.from(this.controller.registry.registry.actions.keys()).join(", ")}`,
+				);
+				continue;
+			}
 
 			const paramModel = actionInfo.paramModel;
 
@@ -1251,12 +1322,14 @@ export class Agent<T = Context> {
 			const validatedParams = params;
 
 			// Create ActionModel instance with the validated parameters
-			const actionModel = new this.ActionModel({
+			const actionModel = new ActionModel({
 				[actionName]: validatedParams,
 			});
 			convertedActions.push(actionModel);
+			logger.debug(`Successfully converted action: ${actionName}`);
 		}
 
+		logger.debug(`Converted ${convertedActions.length} actions successfully`);
 		return convertedActions;
 	}
 
@@ -1355,6 +1428,22 @@ export class Agent<T = Context> {
 		} catch (e) {
 			logger.error(`Error during cleanup: ${e}`);
 		}
+	}
+
+	/**
+	 * Check if the LLM is a Gemini model
+	 */
+	private isGeminiModel(): boolean {
+		// Check various properties that might indicate Gemini
+		const llmConfig = (this.llm as any).lc_kwargs || (this.llm as any);
+		const modelName = llmConfig.model || llmConfig.modelName || "";
+		const className = this.llm.constructor.name;
+
+		return (
+			modelName.toLowerCase().includes("gemini") ||
+			className.toLowerCase().includes("gemini") ||
+			className === "ChatGoogleGenerativeAI"
+		);
 	}
 }
 
