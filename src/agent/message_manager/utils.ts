@@ -302,11 +302,11 @@ export function convertMessagesForNonFunctionCallingModels(
 		} else if (message instanceof SystemMessage) {
 			outputMessages.push(message);
 		} else if (message instanceof ToolMessage) {
-			outputMessages.push({ content: message.content } as HumanMessage);
+			outputMessages.push(new HumanMessage({ content: message.content }));
 		} else if (message instanceof AIMessage) {
 			if (message.tool_calls) {
 				const toolCalls = JSON.stringify(message.tool_calls);
-				outputMessages.push({ content: toolCalls } as AIMessage);
+				outputMessages.push(new AIMessage({ content: toolCalls }));
 			} else {
 				outputMessages.push(message);
 			}
