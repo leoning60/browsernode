@@ -1,6 +1,6 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { PromptTemplate } from "@langchain/core/prompts";
-import winston from "winston";
+import { z } from "zod";
 import { BrowserContext } from "../browser/context";
 import { Registry } from "./registry/service";
 import {
@@ -43,45 +43,33 @@ export class Controller<T = Context> {
 	) {
 		// Initialize registry
 		this.registry = new Registry<T>(excludeActions);
-
 		// Register all default browser actions
 		if (outputModel !== null) {
-			// Create extended output model with success parameter
-			class ExtendedOutputModel {
-				success: boolean = true;
-				data: any;
-
-				constructor(data: any) {
-					this.data = data;
-				}
-			}
-
+			const CustomizedOutputModelAction = z.object({
+				data: outputModel,
+				success: z.boolean(),
+			});
 			this.registry.action(
 				"Complete task - with return text and if the task is finished (success=True) or not yet completely finished (success=False), because last step is reached",
-				{ paramModel: ExtendedOutputModel },
-			)(async function done(params: ExtendedOutputModel) {
-				// Exclude success from the output JSON since it's an internal parameter
-				const outputDict = { ...params.data };
-
-				// Convert enums to string values
-				for (const [key, value] of Object.entries(outputDict)) {
-					if (value && typeof value === "object" && "value" in value) {
-						outputDict[key] = value.value;
-					}
-				}
-
+				{ paramModel: CustomizedOutputModelAction },
+			)(async function done(
+				params: z.infer<typeof CustomizedOutputModelAction>,
+			) {
 				return new ActionResult({
 					isDone: true,
 					success: params.success,
-					extractedContent: JSON.stringify(outputDict),
+					extractedContent: JSON.stringify(params.data),
 				});
 			});
 		} else {
+			// console.debug(
+			// 	"No output model specified, using default DoneAction model",
+			// );
 			// If no output model is specified, use the default DoneAction model
 			this.registry.action(
 				"Complete task - with return text and if the task is finished (success=True) or not yet completely finished (success=False), because last step is reached",
 				{ paramModel: DoneAction },
-			)(async function done(params: DoneAction) {
+			)(async function done(params: z.infer<typeof DoneAction>) {
 				return new ActionResult({
 					isDone: true,
 					success: params.success,
@@ -95,11 +83,12 @@ export class Controller<T = Context> {
 			"Search the query in Google in the current tab, the query should be a search query like humans search in Google, concrete and not vague or super long. More the single most important items.",
 			{ paramModel: SearchGoogleAction },
 		)(async function searchGoogle(
-			params: SearchGoogleAction,
+			params: z.infer<typeof SearchGoogleAction>,
 			browser: BrowserContext,
 		) {
 			const page = await browser.getCurrentPage();
 			await page.goto(`https://www.google.com/search?q=${params.query}&udm=14`);
+			// await page.goto(`https://search.brave.com/search?q=${params.query}&source=web`,);
 			await page.waitForLoadState();
 			const msg = `🔍 Searched for "${params.query}" in Google`;
 			logger.info(msg);
@@ -108,7 +97,10 @@ export class Controller<T = Context> {
 
 		this.registry.action("Navigate to URL in the current tab", {
 			paramModel: GoToUrlAction,
-		})(async function goToUrl(params: GoToUrlAction, browser: BrowserContext) {
+		})(async function goToUrl(
+			params: z.infer<typeof GoToUrlAction>,
+			browser: BrowserContext,
+		) {
 			if (!browser) {
 				throw new Error("Browser context is required but was not provided");
 			}
@@ -122,7 +114,10 @@ export class Controller<T = Context> {
 		});
 
 		this.registry.action("Go back", { paramModel: NoParamsAction })(
-			async function goBack(_: NoParamsAction, browser: BrowserContext) {
+			async function goBack(
+				_: z.infer<typeof NoParamsAction>,
+				browser: BrowserContext,
+			) {
 				if (!browser) {
 					throw new Error("Browser context is required but was not provided");
 				}
@@ -139,7 +134,7 @@ export class Controller<T = Context> {
 		// Wait for x seconds
 		this.registry.action("Wait for x seconds default 3", {
 			paramModel: WaitAction,
-		})(async function wait(params: WaitAction) {
+		})(async function wait(params: z.infer<typeof WaitAction>) {
 			const msg = `🕒 Waiting for ${params.seconds} seconds`;
 			logger.info(msg);
 			await new Promise((resolve) =>
@@ -155,7 +150,7 @@ export class Controller<T = Context> {
 		this.registry.action("Click element", {
 			paramModel: ClickElementAction,
 		})(async function clickElement(
-			params: ClickElementAction,
+			params: z.infer<typeof ClickElementAction>,
 			browser: BrowserContext,
 		) {
 			const session = await browser.getSession();
@@ -218,7 +213,7 @@ export class Controller<T = Context> {
 		this.registry.action("Input text into a input interactive element", {
 			paramModel: InputTextAction,
 		})(async function inputText(
-			params: InputTextAction,
+			params: z.infer<typeof InputTextAction>,
 			browser: BrowserContext,
 			hasSensitiveData: boolean = false,
 		) {
@@ -248,37 +243,40 @@ export class Controller<T = Context> {
 		});
 
 		// Save PDF
-		this.registry.action("Save the current page as a PDF file")(
-			async function savePdf(browser: BrowserContext) {
-				const page = await browser.getCurrentPage();
-				const shortUrl = page.url().replace(/^https?:\/\/(?:www\.)?|\/$/g, "");
-				const slug = shortUrl
-					.replace(/[^a-zA-Z0-9]+/g, "-")
-					.replace(/^-|-$/g, "")
-					.toLowerCase();
-				const sanitizedFilename = `${slug}.pdf`;
+		this.registry.action("Save the current page as a PDF file", {
+			paramModel: NoParamsAction,
+		})(async function savePdf(
+			_: z.infer<typeof NoParamsAction>,
+			browser: BrowserContext,
+		) {
+			const page = await browser.getCurrentPage();
+			const shortUrl = page.url().replace(/^https?:\/\/(?:www\.)?|\/$/g, "");
+			const slug = shortUrl
+				.replace(/[^a-zA-Z0-9]+/g, "-")
+				.replace(/^-|-$/g, "")
+				.toLowerCase();
+			const sanitizedFilename = `${slug}.pdf`;
 
-				await page.emulateMedia({
-					media: "screen",
-				});
-				await page.pdf({
-					path: sanitizedFilename,
-					format: "A4",
-					printBackground: false,
-				});
-				const msg = `Saving page with URL ${page.url()} as PDF to ./${sanitizedFilename}`;
-				logger.info(msg);
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
-			},
-		);
+			await page.emulateMedia({
+				media: "screen",
+			});
+			await page.pdf({
+				path: sanitizedFilename,
+				format: "A4",
+				printBackground: false,
+			});
+			const msg = `Saving page with URL ${page.url()} as PDF to ./${sanitizedFilename}`;
+			logger.info(msg);
+			return new ActionResult({
+				extractedContent: msg,
+				includeInMemory: true,
+			});
+		});
 
 		// Tab Management Actions
 		this.registry.action("Switch tab", { paramModel: SwitchTabAction })(
 			async function switchTab(
-				params: SwitchTabAction,
+				params: z.infer<typeof SwitchTabAction>,
 				browser: BrowserContext,
 			) {
 				await browser.switchToTab(params.pageId);
@@ -296,7 +294,10 @@ export class Controller<T = Context> {
 
 		this.registry.action("Open url in new tab", {
 			paramModel: OpenTabAction,
-		})(async function openTab(params: OpenTabAction, browser: BrowserContext) {
+		})(async function openTab(
+			params: z.infer<typeof OpenTabAction>,
+			browser: BrowserContext,
+		) {
 			if (!browser) {
 				throw new Error("Browser context is required but was not provided");
 			}
@@ -314,7 +315,7 @@ export class Controller<T = Context> {
 			"Extract page content to retrieve specific information from the page, e.g. all company names, a specifc description, all information about, links with companies in structured format or simply links",
 			{ paramModel: ExtractContentAction },
 		)(async function extractContent(
-			params: ExtractContentAction,
+			params: z.infer<typeof ExtractContentAction>,
 			browser: BrowserContext,
 			pageExtractionLlm: BaseChatModel,
 		) {
@@ -343,7 +344,7 @@ export class Controller<T = Context> {
 			} catch (e: any) {
 				logger.debug(`Error extracting content: ${e}`);
 				const msg = `📄 Extracted from page\n: ${content}\n`;
-				logger.info(msg);
+				// logger.info(msg);
 				return new ActionResult({ extractedContent: msg });
 			}
 		});
@@ -351,7 +352,10 @@ export class Controller<T = Context> {
 		this.registry.action(
 			"Scroll down the page by pixel amount - if no amount is specified, scroll down one page",
 			{ paramModel: ScrollAction },
-		)(async function scrollDown(params: ScrollAction, browser: BrowserContext) {
+		)(async function scrollDown(
+			params: z.infer<typeof ScrollAction>,
+			browser: BrowserContext,
+		) {
 			if (!browser) {
 				throw new Error("Browser context is required but was not provided");
 			}
@@ -378,7 +382,10 @@ export class Controller<T = Context> {
 		this.registry.action(
 			"Scroll up the page by pixel amount - if no amount is specified, scroll up one page",
 			{ paramModel: ScrollAction },
-		)(async function scrollUp(params: ScrollAction, browser: BrowserContext) {
+		)(async function scrollUp(
+			params: z.infer<typeof ScrollAction>,
+			browser: BrowserContext,
+		) {
 			if (!browser) {
 				throw new Error("Browser context is required but was not provided");
 			}
@@ -405,7 +412,10 @@ export class Controller<T = Context> {
 		this.registry.action(
 			"Send strings of special keys like Escape,Backspace, Insert, PageDown, Delete, Enter, Shortcuts such as `Control+o`, `Control+Shift+T` are supported as well. This gets used in keyboard.press.",
 			{ paramModel: SendKeysAction },
-		)(async function sendKeys(params: SendKeysAction, browser: BrowserContext) {
+		)(async function sendKeys(
+			params: z.infer<typeof SendKeysAction>,
+			browser: BrowserContext,
+		) {
 			if (!browser) {
 				throw new Error("Browser context is required but was not provided");
 			}
@@ -440,7 +450,7 @@ export class Controller<T = Context> {
 			"If you dont find something which you want to interact with, scroll to it",
 			{ paramModel: ScrollToTextAction },
 		)(async function scrollToText(
-			params: ScrollToTextAction,
+			params: z.infer<typeof ScrollToTextAction>,
 			browser: BrowserContext,
 		) {
 			if (!browser) {
@@ -496,7 +506,7 @@ export class Controller<T = Context> {
 		this.registry.action("Get all options from a native dropdown", {
 			paramModel: GetDropdownOptionsAction,
 		})(async function getDropdownOptions(
-			params: GetDropdownOptionsAction,
+			params: z.infer<typeof GetDropdownOptionsAction>,
 			browser: BrowserContext,
 		): Promise<ActionResult> {
 			const page = await browser.getCurrentPage();
@@ -590,7 +600,7 @@ export class Controller<T = Context> {
 			"Select dropdown option for interactive element index by the text of the option you want to select",
 			{ paramModel: SelectDropdownOptionAction },
 		)(async function selectDropdownOption(
-			params: SelectDropdownOptionAction,
+			params: z.infer<typeof SelectDropdownOptionAction>,
 			browser: BrowserContext,
 		): Promise<ActionResult> {
 			const page = await browser.getCurrentPage();

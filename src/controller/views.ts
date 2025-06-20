@@ -1,153 +1,94 @@
+import { z } from "zod";
 import bnLogger from "../logging_config";
 
 // Setup logger
 const logger = bnLogger.child({
 	module: "browser_node/controller/views",
 });
+
 // DoneAction
-export class DoneAction {
-	text: string;
-	success: boolean;
+export const DoneAction = z.object({
+	text: z.string(),
+	success: z.boolean(),
+});
 
-	constructor(text: string, success: boolean) {
-		this.text = text;
-		this.success = success;
-	}
-}
 // SearchGoogleAction
-export class SearchGoogleAction {
-	query: string;
-
-	constructor(query: string) {
-		this.query = query;
-	}
-}
+export const SearchGoogleAction = z.object({
+	query: z.string(),
+});
 
 // GoToUrlAction
-export class GoToUrlAction {
-	url: string;
+export const GoToUrlAction = z.object({
+	url: z.string(),
+});
 
-	constructor(url: string) {
-		this.url = url;
-	}
-}
 // GoBackAction empty
 
 // WaitAction
-export class WaitAction {
-	seconds: number;
+export const WaitAction = z.object({
+	seconds: z.number(),
+});
 
-	constructor(seconds: number) {
-		this.seconds = seconds;
-	}
-}
 // ClickElementAction
-export class ClickElementAction {
-	index: number;
-	xpath: string | undefined;
-
-	constructor(index: number, xpath?: string) {
-		this.index = index;
-		this.xpath = xpath;
-	}
-}
+export const ClickElementAction = z.object({
+	index: z.number(),
+	xpath: z.string().optional(),
+});
 
 // InputTextAction
-export class InputTextAction {
-	index: number;
-	text: string;
-	xpath: string | undefined;
+export const InputTextAction = z.object({
+	index: z.number(),
+	text: z.string(),
+	xpath: z.string().optional(),
+});
 
-	constructor(index: number, text: string, xpath?: string) {
-		this.index = index;
-		this.text = text;
-		this.xpath = xpath;
-	}
-}
 // SavePdfAction empty
 
 // SwitchTabAction
-export class SwitchTabAction {
-	pageId: number;
-
-	constructor(pageId: number) {
-		this.pageId = pageId;
-	}
-}
+export const SwitchTabAction = z.object({
+	pageId: z.number(),
+});
 
 // OpenTabAction
-export class OpenTabAction {
-	url: string;
+export const OpenTabAction = z.object({
+	url: z.string(),
+});
 
-	constructor(url: string) {
-		this.url = url;
-	}
-}
 // extractContentAction
-export class ExtractContentAction {
-	goal: string;
+export const ExtractContentAction = z.object({
+	goal: z.string(),
+});
 
-	constructor(goal: string) {
-		this.goal = goal;
-	}
-}
 // ScrollAction
-export class ScrollAction {
-	amount: number | undefined;
-
-	constructor(amount?: number) {
-		this.amount = amount;
-	}
-}
+export const ScrollAction = z.object({
+	amount: z.number().optional(),
+});
 
 // SendKeysAction
-export class SendKeysAction {
-	keys: string;
-
-	constructor(keys: string) {
-		this.keys = keys;
-	}
-}
+export const SendKeysAction = z.object({
+	keys: z.string(),
+});
 
 // scrollToText
-export class ScrollToTextAction {
-	text: string;
-
-	constructor(text: string) {
-		this.text = text;
-	}
-}
+export const ScrollToTextAction = z.object({
+	text: z.string(),
+});
 
 // GetDropdownOptions
-export class GetDropdownOptionsAction {
-	index: number;
-
-	constructor(index: number) {
-		this.index = index;
-	}
-}
+export const GetDropdownOptionsAction = z.object({
+	index: z.number(),
+});
 
 // SelectDropdownOption
-export class SelectDropdownOptionAction {
-	index: number;
-	text: string;
-
-	constructor(index: number, text: string) {
-		this.index = index;
-		this.text = text;
-	}
-}
+export const SelectDropdownOptionAction = z.object({
+	index: z.number(),
+	text: z.string(),
+});
 
 // ExtractPageContentAction
-export class ExtractPageContentAction {
-	value: string;
-
-	constructor(value: string) {
-		this.value = value;
-	}
-}
+export const ExtractPageContentAction = z.object({
+	value: z.string(),
+});
 
 // NoParamsAction
-export class NoParamsAction {
-	constructor() {}
-}
+export const NoParamsAction = z.object({});

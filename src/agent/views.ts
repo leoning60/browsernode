@@ -10,6 +10,7 @@ import { DOMHistoryElement } from "../dom/history_tree_processor/view";
 import type { DOMElementNode } from "../dom/views";
 
 import type path from "path";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { modelDump } from "../bn_utils";
 import type { SelectorMap } from "../dom/views";
 import bnLogger from "../logging_config";
@@ -279,113 +280,9 @@ class AgentOutput {
 
 			// Generate properties for each action
 			for (const [actionName, paramModel] of Object.entries(custom_actions)) {
-				// Handle each action type specifically based on the paramModel
-				if (actionName === "done") {
-					actionProperties[actionName] = z
-						.object({
-							success: z.boolean(),
-							text: z.string(),
-						})
-						.optional();
-				} else if (actionName === "searchGoogle") {
-					actionProperties[actionName] = z
-						.object({
-							query: z.string(),
-						})
-						.optional();
-				} else if (actionName === "goToUrl") {
-					actionProperties[actionName] = z
-						.object({
-							url: z.string(),
-						})
-						.optional();
-				} else if (actionName === "goBack") {
-					actionProperties[actionName] = z.object({}).optional();
-				} else if (actionName === "wait") {
-					actionProperties[actionName] = z
-						.object({
-							seconds: z.number(),
-						})
-						.optional();
-				} else if (actionName === "clickElement") {
-					actionProperties[actionName] = z
-						.object({
-							index: z.number(),
-							xpath: z.string().nullable(),
-						})
-						.optional();
-				} else if (actionName === "inputText") {
-					actionProperties[actionName] = z
-						.object({
-							index: z.number(),
-							text: z.string(),
-							xpath: z.string().nullable(),
-						})
-						.optional();
-				} else if (actionName === "savePdf") {
-					actionProperties[actionName] = z.object({}).optional();
-				} else if (actionName === "switchTab") {
-					actionProperties[actionName] = z
-						.object({
-							pageId: z.number(),
-						})
-						.optional();
-				} else if (actionName === "openTab") {
-					actionProperties[actionName] = z
-						.object({
-							url: z.string(),
-						})
-						.optional();
-				} else if (actionName === "extractContent") {
-					actionProperties[actionName] = z.object({}).optional();
-				} else if (actionName === "scrollDown" || actionName === "scrollUp") {
-					actionProperties[actionName] = z
-						.object({
-							amount: z.number().nullable(),
-						})
-						.optional();
-				} else if (actionName === "sendKeys") {
-					actionProperties[actionName] = z
-						.object({
-							keys: z.string(),
-						})
-						.optional();
-				} else if (actionName === "scrollToText") {
-					actionProperties[actionName] = z
-						.object({
-							text: z.string(),
-						})
-						.optional();
-				} else if (actionName === "getDropdownOptions") {
-					actionProperties[actionName] = z
-						.object({
-							index: z.number(),
-						})
-						.optional();
-				} else if (actionName === "selectDropdownOption") {
-					actionProperties[actionName] = z
-						.object({
-							index: z.number(),
-							text: z.string(),
-						})
-						.optional();
-				} else if (paramModel && typeof paramModel === "object") {
-					// For any other actions, try to generate schema from the paramModel
-					const properties: Record<string, z.ZodTypeAny> = {};
-
-					for (const [paramName, paramType] of Object.entries(paramModel)) {
-						if (paramType === Number) {
-							properties[paramName] = z.number();
-						} else if (paramType === Boolean) {
-							properties[paramName] = z.boolean();
-						} else if (paramType === null || paramType === undefined) {
-							properties[paramName] = z.string().nullable();
-						} else {
-							properties[paramName] = z.string();
-						}
-					}
-
-					actionProperties[actionName] = z.object(properties).optional();
+				// Make sure paramModel.paramModel is a Zod schema and convert to optional
+				if (paramModel && paramModel.paramModel) {
+					actionProperties[actionName] = paramModel.paramModel.optional();
 				}
 			}
 
