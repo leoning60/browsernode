@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { execSync, spawn } from "child_process";
 import * as http from "http";
 import { promisify } from "util";
 import type {
@@ -115,9 +115,115 @@ export class Browser {
 
 	@timeExecution("--init(browser)")
 	private async init(): Promise<PlaywrightBrowser> {
-		const browser = await this.setupBrowser();
-		this.playwrightBrowser = browser;
-		return this.playwrightBrowser;
+		try {
+			// First check if Chrome is already running and try to connect
+			const chromeRunning = await this.checkChromeInstance();
+			if (chromeRunning && this.config.browserInstancePath) {
+				this.logger.info("Detected running Chrome instance, connecting...");
+				const versionInfo = await this.chromeJsonVersionInfo(
+					"http://localhost:9222/json/version",
+				);
+
+				if (versionInfo.versionInfo?.webSocketDebuggerUrl) {
+					this.logger.debug(
+						`Connecting to WebSocket: ${versionInfo.versionInfo.webSocketDebuggerUrl}`,
+					);
+					try {
+						let browserType;
+						if (this.config.browserClass === "firefox") {
+							browserType = await firefox;
+						} else if (this.config.browserClass === "webkit") {
+							browserType = await webkit;
+						} else {
+							browserType = await chromium;
+						}
+
+						const browser = await browserType.connectOverCDP({
+							wsEndpoint: versionInfo.versionInfo.webSocketDebuggerUrl,
+							timeout: 20000,
+							slowMo: 50, // Add slight delay to ensure stability
+						});
+						this.playwrightBrowser = browser;
+						return browser;
+					} catch (e) {
+						this.logger.error(`Failed to connect to existing Chrome: ${e}`);
+					}
+				}
+			}
+
+			// Fall back to regular setup if direct connection failed
+			const browser = await this.setupBrowser();
+			this.playwrightBrowser = browser;
+			return browser;
+		} catch (e) {
+			this.logger.error(`Browser initialization failed: ${e}`);
+			throw e;
+		}
+	}
+
+	private async checkChromeInstance(): Promise<boolean> {
+		return new Promise((resolve) => {
+			const req = http.get(
+				"http://localhost:9222/json/version",
+				(res: http.IncomingMessage) => {
+					if (res.statusCode === 200) {
+						resolve(true);
+					} else {
+						resolve(false);
+					}
+				},
+			);
+
+			req.on("error", () => {
+				resolve(false);
+			});
+
+			req.setTimeout(2000, () => {
+				req.destroy();
+				resolve(false);
+			});
+		});
+	}
+
+	private async chromeJsonVersionInfo(
+		url: "http://localhost:9222/json/version",
+	): Promise<{
+		running: boolean;
+		versionInfo?: Record<string, string>;
+	}> {
+		return new Promise((resolve) => {
+			let responseData = "";
+			let req = http.get(url, (res: http.IncomingMessage) => {
+				if (res.statusCode === 200) {
+					res.on("data", (chunk) => {
+						responseData += chunk;
+					});
+
+					res.on("end", () => {
+						try {
+							const versionInfo = JSON.parse(responseData);
+							resolve({
+								running: true,
+								versionInfo: versionInfo,
+							});
+						} catch (error) {
+							resolve({ running: true });
+						}
+					});
+				} else {
+					resolve({ running: false });
+				}
+			});
+
+			req.on("error", () => {
+				resolve({ running: false });
+			});
+
+			req.setTimeout(2000, () => {
+				req.destroy();
+				resolve({ running: false });
+			});
+		});
 	}
 
 	private async setupCdp(browser: BrowserType<{}>): Promise<PlaywrightBrowser> {
@@ -177,15 +283,28 @@ export class Browser {
 			});
 		};
 		try {
-			// 检查浏览器是否已经运行
+			// Check if the browser is already running
 			const chromeRunning = await checkChromeInstance();
 			if (chromeRunning) {
 				this.logger.info("Reusing existing Chrome instance");
+				// Use the EXACT WebSocket debugger URL from the existing Chrome instance
+				const versionInfo = await this.chromeJsonVersionInfo(
+					"http://localhost:9222/json/version",
+				);
+				if (!versionInfo.versionInfo?.webSocketDebuggerUrl) {
+					throw new Error(
+						"Could not get WebSocket URL from existing Chrome instance",
+					);
+				}
+				this.logger.debug(
+					`Connecting to: ${versionInfo.versionInfo.webSocketDebuggerUrl}`,
+				);
+
+				// Connect directly using the WebSocket URL
 				return browser.connectOverCDP({
-					wsEndpoint: await this.chromeJsonVersionInfo(
-						"http://localhost:9222/json/version",
-					).then((res) => res.versionInfo?.webSocketDebuggerUrl),
-					timeout: 20000, //20 second timeout for connection
+					wsEndpoint: versionInfo.versionInfo.webSocketDebuggerUrl,
+					timeout: 20000, // 20 second timeout for connection
+					slowMo: 50, // Add slight delay to avoid race conditions
 				});
 			}
 		} catch (error) {
@@ -194,16 +313,21 @@ export class Browser {
 			);
 		}
 
-		// 启动新的Chrome实例
+		// Start a new Chrome instance
 		const args = ["--remote-debugging-port=9222"];
 		if (this.config.headless) {
 			args.push("--headless");
 		}
 
-		// 合并额外的浏览器参数
+		// Merge extra browser arguments
 		const allArgs = [...args, ...this.config.extraBrowserArgs];
 
-		// 启动Chrome进程
+		// Start Chrome process
+		// console.debug(
+		// 	"Starting Chrome process:",
+		// 	this.config.browserInstancePath,
+		// 	allArgs,
+		// );
 		const chromeProcess = spawn(this.config.browserInstancePath, allArgs, {
 			stdio: "ignore",
 			detached: true,
@@ -219,12 +343,16 @@ export class Browser {
 			await new Promise((resolve) => setTimeout(resolve, 1000));
 		}
 
-		// 连接到新实例
+		// Connect to the new instance
 		try {
+			const versionInfo = await this.chromeJsonVersionInfo(
+				"http://localhost:9222/json/version",
+			);
+			if (!versionInfo.versionInfo?.webSocketDebuggerUrl) {
+				throw new Error("Could not get WebSocket URL from Chrome instance");
+			}
 			return browser.connectOverCDP({
-				wsEndpoint: await this.chromeJsonVersionInfo(
-					"http://localhost:9222/json/version",
-				).then((res) => res.versionInfo?.webSocketDebuggerUrl),
+				wsEndpoint: versionInfo.versionInfo.webSocketDebuggerUrl,
 				timeout: 20000, //20 second timeout for connection
 			});
 		} catch (error) {
@@ -233,46 +361,6 @@ export class Browser {
 				"To start Chrome in Debug mode, you need to close all existing Chrome instances and try again otherwise we cannot connect to the instance.",
 			);
 		}
-	}
-	private async chromeJsonVersionInfo(
-		url: "http://localhost:9222/json/version",
-	): Promise<{
-		running: boolean;
-		versionInfo?: Record<string, string>;
-	}> {
-		return new Promise((resolve) => {
-			let responseData = "";
-			let req = http.get(url, (res: http.IncomingMessage) => {
-				if (res.statusCode === 200) {
-					res.on("data", (chunk) => {
-						responseData += chunk;
-					});
-
-					res.on("end", () => {
-						try {
-							const versionInfo = JSON.parse(responseData);
-							resolve({
-								running: true,
-								versionInfo: versionInfo,
-							});
-						} catch (error) {
-							resolve({ running: true });
-						}
-					});
-				} else {
-					resolve({ running: false });
-				}
-			});
-
-			req.on("error", () => {
-				resolve({ running: false });
-			});
-
-			req.setTimeout(2000, () => {
-				req.destroy();
-				resolve({ running: false });
-			});
-		});
 	}
 
 	private async setupStandardBrowser(
@@ -351,9 +439,16 @@ export class Browser {
 	public async close(): Promise<void> {
 		try {
 			if (!this.config.forceKeepBrowserAlive) {
+				// console.debug(
+				// 	"this.config.forceKeepBrowserAlive:",
+				// 	this.config.forceKeepBrowserAlive,
+				// );
 				if (this.playwrightBrowser) {
+					// TODO: not working. now use pkill -f 'Google Chrome' to kill the browser.
 					await this.playwrightBrowser.close();
 					this.playwrightBrowser = null;
+					// console.debug("browser closed");
+					// execSync("pkill -f 'Google Chrome'");
 				}
 			}
 		} catch (e) {
