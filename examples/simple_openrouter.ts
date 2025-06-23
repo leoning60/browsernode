@@ -1,4 +1,3 @@
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
 import { Agent } from "browsernode";
 
@@ -18,5 +17,5 @@ const llm = new ChatOpenAI({
 
 const task = "Search for the latest tesla stock price";
 const agent = new Agent(task, llm);
-console.log("---simple.ts agent run---");
+console.log("---simple_openrouter.ts agent run---");
 agent.run();

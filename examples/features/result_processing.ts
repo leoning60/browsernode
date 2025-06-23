@@ -53,12 +53,14 @@ async function runAgent(task: string, max_steps: number = 38) {
 	}
 }
 
-if (require.main === module) {
+async function main() {
 	const task =
-		"Go to https://www.google.com and search for 'tesla' and click on the first result";
+		"Go to https://search.brave.com and search for tesla stock price";
 	const result = await runAgent(task);
 	// console.log(
 	// 	"example/features/result_processing.ts result:",
 	// 	JSON.stringify(result, null, 2),
 	// );
 }
+
+main();

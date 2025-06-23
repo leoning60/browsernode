@@ -14,7 +14,7 @@ async function runAgent(task: string, max_steps: number = 38) {
 	return result;
 }
 
-if (require.main === module) {
+async function main() {
 	const task =
 		"Go to https://www.google.com and search for 'node.js' and click on the first result";
 	const result = await runAgent(task);
@@ -23,3 +23,5 @@ if (require.main === module) {
 		JSON.stringify(result, null, 2),
 	);
 }
+
+main().catch(console.error);

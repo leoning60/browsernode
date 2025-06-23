@@ -30,7 +30,10 @@ async function main() {
 		apiKey: process.env.OPENAI_API_KEY,
 		streaming: true,
 	});
-	const agent = new Agent(task, model, { controller, useVision: true });
+	const agent = new Agent(task, model, {
+		controller: controller,
+		useVision: true,
+	});
 
 	await agent.run();
 }
