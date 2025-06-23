@@ -125,12 +125,17 @@ export class Registry<Context = any> {
 		sensitiveData: Record<string, string>,
 	): void {
 		const secretPattern = /<secret>(.*?)<\/secret>/g;
+		const placeholderPattern = /\[PLACEHOLDER:(.*?)\]/g;
 
 		const replaceSecrets = (value: any): any => {
 			if (typeof value === "string") {
-				return value.replace(secretPattern, (match, placeholder) => {
+				value = value.replace(secretPattern, (match, placeholder) => {
 					return sensitiveData[placeholder] || match;
 				});
+				value = value.replace(placeholderPattern, (match, placeholder) => {
+					return sensitiveData[placeholder] || match;
+				});
+				return value;
 			} else if (Array.isArray(value)) {
 				return value.map(replaceSecrets);
 			} else if (typeof value === "object" && value !== null) {

@@ -27,6 +27,7 @@ export class MessageManagerSettings {
 	messageContext?: string;
 	sensitiveData?: Record<string, string>;
 	availableFilePaths?: string[];
+	modelName?: string;
 
 	constructor(settings: Partial<MessageManagerSettings> = {}) {
 		Object.assign(this, settings);
@@ -83,7 +84,15 @@ export class MessageManager {
 			let info = `Here are placeholders for sensitve data: ${Object.keys(
 				this.settings.sensitiveData,
 			)}`;
-			info += "To use them, write <secret>the placeholder name</secret>";
+			// Use different format for DeepSeek models to avoid HTML-like tags
+			if (
+				this.settings.modelName &&
+				this.settings.modelName.includes("deepseek")
+			) {
+				info += "\nTo use them, write [PLACEHOLDER:the_placeholder_name]";
+			} else {
+				info += "To use them, write <secret>the placeholder name</secret>";
+			}
 			const infoMessage = new HumanMessage(info);
 			this.addMessageWithTokens(infoMessage);
 		}
@@ -265,7 +274,15 @@ export class MessageManager {
 				if (!val) {
 					continue;
 				}
-				value = value.replace(val, `<secret>${key}</secret>`);
+				// Use different format for DeepSeek models
+				if (
+					this.settings.modelName &&
+					this.settings.modelName.includes("deepseek")
+				) {
+					value = value.replace(val, `[PLACEHOLDER:${key}]`);
+				} else {
+					value = value.replace(val, `<secret>${key}</secret>`);
+				}
 			}
 
 			return value;

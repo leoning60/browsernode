@@ -3,9 +3,11 @@ import { existsSync, readFileSync } from "fs";
 import path, { resolve } from "path";
 import { inspect, promisify } from "util";
 import { config } from "dotenv";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import {
+	AIMessage,
 	BaseMessage,
 	HumanMessage,
 	SystemMessage,
@@ -268,6 +270,7 @@ export class Agent<T = Context> {
 				messageContext: this.settings.messageContext,
 				sensitiveData,
 				availableFilePaths: this.settings.availableFilePaths,
+				modelName: this.modelName,
 			} as MessageManagerSettings,
 			state: this.state.messageManagerState,
 		});
@@ -397,6 +400,7 @@ export class Agent<T = Context> {
 	private setupActionModels(): void {
 		this.ActionModel = this.controller.registry.createActionModel();
 		this.AgentOutput = AgentOutput.typeWithCustomActions(this.ActionModel);
+		// console.debug("this.AgentOutput::::", this.AgentOutput);
 		// Used to force the done action when max_steps is reached
 		this.DoneActionModel = this.controller.registry.createActionModel(["done"]);
 		this.DoneAgentOutput = AgentOutput.typeWithCustomActions(
@@ -410,7 +414,8 @@ export class Agent<T = Context> {
 			if (
 				this.modelName &&
 				(this.modelName.includes("deepseek-reasoner") ||
-					this.modelName.includes("deepseek-r1"))
+					this.modelName.includes("deepseek-r1") ||
+					this.modelName.includes("deepseek"))
 			) {
 				return "raw";
 			} else if (
@@ -717,7 +722,6 @@ export class Agent<T = Context> {
 
 		if (this.toolCallingMethod === "raw") {
 			const output = await this.llm.invoke(inputMessages);
-			console.debug("this.toolCallingMethod === raw,output:", output);
 			// Handle the case where output.content might be an array
 			let contentString: string;
 			if (Array.isArray(output.content)) {
