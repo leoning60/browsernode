@@ -931,7 +931,7 @@ export class BrowserContext {
 		const elementHandle = await this.getLocateElement(elementNode);
 		if (!elementHandle)
 			throw new BrowserError(
-				`Element: ${JSON.stringify(elementNode)} not found`,
+				`Element not found: tag=${elementNode.tagName}, xpath=${elementNode.xpath}, index=${elementNode.highlightIndex}`,
 			);
 
 		try {
@@ -966,7 +966,9 @@ export class BrowserContext {
 		const page = await this.getCurrentPage();
 		const elementHandle = await this.getLocateElement(elementNode);
 		if (!elementHandle)
-			throw new Error(`Element: ${JSON.stringify(elementNode)} not found`);
+			throw new Error(
+				`Element not found: tag=${elementNode.tagName}, xpath=${elementNode.xpath}, index=${elementNode.highlightIndex}`,
+			);
 
 		const performClick = async (
 			clickFunc: () => Promise<void>,
