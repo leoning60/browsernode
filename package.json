@@ -1,18 +1,44 @@
 {
 	"name": "browsernode",
-	"module": "src/index.ts",
-	"type": "module",
-	"main": "src/index.ts",
-	"exports": {
-		".": "./src/index.ts"
+	"version": "1.0.0",
+	"description": "A powerful browser automation library with AI agent capabilities",
+	"keywords": [
+		"browser",
+		"automation",
+		"ai",
+		"langchain",
+		"playwright",
+		"agent"
+	],
+	"license": "MIT",
+	"homepage": "https://github.com/leoning60/browsernode",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/leoning60/browsernode.git"
 	},
+	"bugs": {
+		"url": "https://github.com/leoning60/browsernode/issues"
+	},
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": ["dist", "README.md", "LICENSE"],
 	"scripts": {
-		"test": "vitest",
-		"dev": "bun run src/index.ts"
+		"build": "tsc -p tsconfig.build.json",
+		"prepublishOnly": "npm run build",
+		"test": "vitest"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
-		"@types/node": "^22.13.13"
+		"@types/node": "^22.13.13",
+		"typescript": "^5.8.2"
 	},
 	"peerDependencies": {
 		"typescript": "^5.8.2"

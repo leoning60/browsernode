@@ -1,10 +1,32 @@
-**/*
-!/dist/**
-!/lib/**
-!index.js
-!index.d.ts
-!index.d.cts
-!CHANGELOG.md
-!LICENSE
-!MIGRATION_GUIDE.md
-!README.md
+# Source files
+src/
+examples/
+eval/
+docs/
+static/
+
+# Development files
+.github/
+*.test.ts
+*.test.js
+test/
+**/*.test.*
+
+# Config files
+tsconfig.json
+tsconfig.build.json
+biome.json
+lefthook.yml
+.gitignore
+
+# Dependencies
+node_modules/
+
+# Build artifacts that shouldn't be published
+*.tsbuildinfo
+
+# Keep these files for publishing:
+# dist/
+# package.json
+# README.md
+# LICENSE
