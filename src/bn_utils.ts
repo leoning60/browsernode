@@ -4,11 +4,11 @@ import { z } from "zod";
  * @param schema Zod Schema object
  * @returns simplified structure, showing the type name of each field
  */
-export function simplifyZodSchema(schema: z.ZodObject<any>) {
-	interface SchemaInfo {
-		[key: string]: string | Record<string, string>;
-	}
+interface SchemaInfo {
+	[key: string]: string | Record<string, string>;
+}
 
+export function simplifyZodSchema(schema: z.ZodObject<any>): SchemaInfo {
 	const schemaStructure: SchemaInfo = {};
 	const shape = schema.shape;
 

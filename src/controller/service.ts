@@ -178,7 +178,7 @@ export class Controller<T = Context> {
 				});
 			}
 
-			let msg = null;
+			let msg: string | null = null;
 
 			try {
 				const downloadPath = await browser.clickElementNode(elementNode);
@@ -199,7 +199,7 @@ export class Controller<T = Context> {
 				}
 
 				return new ActionResult({
-					extractedContent: msg,
+					extractedContent: msg || undefined,
 					includeInMemory: true,
 				});
 			} catch (e: any) {
