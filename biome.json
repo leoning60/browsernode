@@ -6,8 +6,14 @@
 		"useIgnoreFile": false
 	},
 	"files": {
-		"ignoreUnknown": false,
-		"ignore": [".github/workflows/**"]
+		"ignoreUnknown": true,
+		"ignore": [
+			".github/workflows/**",
+			"dist/**",
+			"node_modules/**",
+			"*.test.ts",
+			"**/*.test.*"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -17,17 +23,29 @@
 		"enabled": true
 	},
 	"linter": {
-		"enabled": false,
+		"enabled": true,
 		"rules": {
-			"recommended": true,
+			"recommended": false,
+			"style": {
+				"noNonNullAssertion": "off",
+				"useConst": "warn"
+			},
 			"suspicious": {
-				"noExplicitAny": "off"
+				"noExplicitAny": "off",
+				"noArrayIndexKey": "off"
+			},
+			"correctness": {
+				"noUnusedVariables": "warn"
+			},
+			"complexity": {
+				"noBannedTypes": "off"
 			}
 		}
 	},
 	"javascript": {
 		"formatter": {
-			"quoteStyle": "double"
+			"quoteStyle": "double",
+			"semicolons": "always"
 		}
 	}
 }

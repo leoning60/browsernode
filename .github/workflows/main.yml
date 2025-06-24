@@ -14,19 +14,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Run Biome check
-        run: bunx @biomejs/biome check --no-errors-on-unmatched ./src
+        run: npx @biomejs/biome check --no-errors-on-unmatched ./src
 
       - name: Run Lefthook pre-commit hooks
-        run: bunx lefthook run pre-commit
+        run: npx lefthook run pre-commit
 
   test:
     name: Run Tests
@@ -35,16 +36,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Run tests
-        run: bun test
+        run: npm test
 
   build:
     name: Build
@@ -53,13 +55,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Build
-        run: bun build ./src/index.ts --outdir ./dist
+        run: npm run build

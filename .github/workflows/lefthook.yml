@@ -15,16 +15,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: "18"
+          cache: "npm"
 
       - name: Install dependencies
-        run: bun install
+        run: npm ci
 
       - name: Install Lefthook
-        run: bun install -g lefthook
+        run: npm install -g lefthook
 
       - name: Run Lefthook (pre-commit hooks)
         run: lefthook run pre-commit
