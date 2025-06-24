@@ -1,10 +1,7 @@
-import { Agent, Browser, BrowserConfig } from "browsernode";
-
-import { mkdirSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { fileURLToPath } from "url";
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatOpenAI } from "@langchain/openai";
+import { Agent, Browser, BrowserConfig } from "browsernode";
 import { BrowserContextConfig } from "../../src/browser/context";
 import { saveScreenshots } from "../utils/save_screenshots";
 
