@@ -1,0 +1,356 @@
+---
+title: "Agent Settings"
+description: "Learn how to configure the agent"
+icon: "gear"
+---
+
+## Overview
+
+The `Agent` class is the core component of Browsernode that handles browser automation. Here are the main configuration options you can use when initializing an agent.
+
+## Basic Settings
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+// Initialize the model
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+// Create agent with the model
+const task = "Your task here";
+const agent = new Agent(task, llm);
+agent.run();
+```
+
+### Required Parameters
+
+- `task`: The instruction for the agent to execute
+- `llm`: A LangChain chat model instance. See <a href="/customize/supported-models">LangChain Models</a> for supported models.
+
+## Agent Behavior
+
+Control how the agent operates:
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent, Controller } from "browsernode";
+import * as fs from "fs";
+import { z } from "zod";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+
+function getCurrentDirPath() {
+	const __filename = fileURLToPath(import.meta.url);
+	return dirname(__filename);
+}
+
+// Initialize controller first
+const customController = new Controller();
+
+// Use zod to define the action schema
+const SaveTextFileAction = z.object({
+	content: z.string(),
+});
+// Generate output directory once at startup
+customController.action("Save content to text file", {
+	paramModel: SaveTextFileAction,
+})(async function saveTextFile(params: z.infer<typeof SaveTextFileAction>) {
+	const content = params.content;
+	fs.appendFileSync(
+		join(getCurrentDirPath(), "hacker_news.txt"),
+		typeof content === "string" ? content : JSON.stringify(content),
+	);
+	return `Saved news to hacker_news.txt`;
+});
+
+const agent = new Agent(task, model, {
+	controller: customController,
+	useVision: true,
+	saveConversationPath: "logs/conversation",
+});
+agent.run();
+```
+### Behavior Parameters
+
+- `controller`: Registry of functions the agent can call. Defaults to base Controller. See <a href="/customize/custom-functions">Custom Functions</a> for details.
+- `useVision`: Enable/disable vision capabilities. Defaults to `True`.
+  - When enabled, the model processes visual information from web pages
+  - Disable to reduce costs or use models without vision support
+  - For GPT-4o, image processing costs approximately 800-1000 tokens (~$0.002 USD) per image (but this depends on the defined screen size)
+- `saveConversationPath`: Path to save the complete conversation history. Useful for debugging.
+- `systemPromptClass`: Custom system prompt class. See <a href="/customize/system-prompt">System Prompt</a> for customization options.
+
+<Note>
+  Vision capabilities are recommended for better web interaction understanding,
+  but can be disabled to reduce costs or when using models without vision
+  support.
+</Note>
+
+## (Reuse) Browser Configuration
+
+You can configure how the agent interacts with the browser. To see more `Browser` options refer to the <a href="/customize/browser-settings">Browser Settings</a> documentation.
+
+### Reuse Existing Browser
+
+`browser`: A Browsernode Browser instance. When provided, the agent will reuse this browser instance and automatically create new contexts for each `run()`.
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent, Browser, BrowserConfig } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	temperature: 0.0,
+	streaming: true,
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+const task = "Search for the latest nvidia stock price";
+// const task =" Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.";
+
+// Create browser configuration
+const config = new BrowserConfig({
+	headless: false, // Make sure the browser is visible
+	browserClass: "chromium", // Use Chrome/Chromium
+	browserInstancePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // Path to Chrome on macOS
+	extraBrowserArgs: [
+		"--start-maximized",
+		"--user-data-dir=/tmp/chrome-browsernode", // Use a separate user data directory
+		"--download-path=/tmp/chrome-browsernode/Downloads",
+	], // Optional: start with maximized window
+	forceKeepBrowserAlive: true, // Add this option to prevent closing browser when using existing instance
+});
+
+const agent = new Agent(task, llm, {
+	browser: new Browser(config),
+});
+// Run the agent task and handle process termination
+await agent.run();
+```
+
+<Note>
+  Remember: in this scenario the `Browser` will not be closed automatically.
+</Note>
+
+### Reuse Existing Browser Context
+
+`browserContext`: A Playwright browser context. Useful for maintaining persistent sessions. See <a href="/customize/persistent-browser">Persistent Browser</a> for more details.
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import {
+	Agent,
+	AgentHistoryList,
+	Browser,
+	BrowserConfig,
+	BrowserContextConfig,
+} from "browsernode";
+
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey) {
+	throw new Error("OPENAI_API_KEY is not set");
+}
+
+async function runAgent(task: string, max_steps: number = 38) {
+	const browser = new Browser(
+		new BrowserConfig({
+			headless: false,
+			disableSecurity: true,
+			extraBrowserArgs: ["--window-size=2000,2000"],
+		}),
+	);
+	const context = await browser.newContext(
+		new BrowserContextConfig({
+			tracePath: "./tmp/result_processing/",
+			noViewport: false,
+			browserWindowSize: { width: 1280, height: 1000 },
+		}),
+	);
+	const llm = new ChatOpenAI({
+		modelName: "gpt-4o",
+		temperature: 0.0,
+		openAIApiKey: apiKey,
+	});
+	try {
+		const agent = new Agent(task, llm, { browserContext: context });
+		const history: AgentHistoryList = await agent.run(max_steps);
+		console.log("Final Result:");
+		console.log(JSON.stringify(history.finalResult(), null, 4));
+
+		console.log("\nErrors:");
+		console.log(JSON.stringify(history.errors(), null, 4));
+
+		// e.g. xPaths the model clicked on
+		console.log("\nModel Outputs:");
+		console.log(JSON.stringify(history.modelActions(), null, 4));
+
+		console.log("\nThoughts:");
+		console.log(JSON.stringify(history.modelThoughts(), null, 4));
+	} finally {
+		await context.close();
+		await browser.close();
+	}
+}
+
+async function main() {
+	const task =
+		"Go to https://search.brave.com and search for tesla stock price";
+	const result = await runAgent(task);
+}
+
+main();
+
+
+```
+
+For more information about how browser context works, refer to the [Playwright
+documentation](https://playwright.dev/docs/api/class-browsercontext).
+
+<Note>
+  You can reuse the same context for multiple agents. If you do nothing, the
+  browser will be automatically created and closed on `run()` completion.
+</Note>
+
+## Running the Agent
+
+The agent is executed using the async `run()` method:
+
+- `maxSteps` (default: `100`)
+  Maximum number of steps the agent can take during execution. This prevents infinite loops and helps control execution time.
+
+## Agent History
+
+The method returns an `AgentHistoryList` object containing the complete execution history. This history is invaluable for debugging, analysis, and creating reproducible scripts.
+
+```js
+// Example of accessing history
+const history = await agent.run()
+
+// Access (some) useful information
+history.urls()              // List of visited URLs
+history.screenshots()       // List of screenshot paths
+history.actionNames()      // Names of executed actions
+history.extractedContent() // Content extracted during execution
+history.errors()           // Any errors that occurred
+history.modelActions()     // All actions with their parameters
+```
+
+The `AgentHistoryList` provides many helper methods to analyze the execution:
+
+- `finalResult()`: Get the final extracted content
+- `isDone()`: Check if the agent completed successfully
+- `hasErrors()`: Check if any errors occurred
+- `modelThoughts()`: Get the agent's reasoning process
+- `actionResults()`: Get results of all actions
+
+<Note>
+  For a complete list of helper methods and detailed history analysis
+  capabilities, refer to the [AgentHistoryList source
+  code](../../src/agent/views.ts).
+</Note>
+
+## Run initial actions without LLM
+With [this example](../../examples/features/initial_actions.ts) you can run initial actions without the LLM.
+Specify the action as a dictionary where the key is the action name and the value is the action parameters. You can find all our actions in the [Controller](../../src/controller/service.ts) source code.
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+const initialActions = [
+	{ openTab: { url: "https://search.brave.com" } },
+	{
+		openTab: {
+			url: "https://www.anthropic.com/engineering/building-effective-agents",
+		},
+	},
+	{ scrollDown: { amount: 5000 } },
+];
+
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o-mini",
+	temperature: 0.0,
+	streaming: true,
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+const task = "What theories are displayed on the page?";
+const agent = new Agent(task, llm, { initialActions: initialActions });
+console.log("---initial_actions.ts agent run---");
+agent.run();
+
+```
+
+## Run with message context
+
+You can configure the agent and provide a separate message to help the LLM understand the task better.
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	temperature: 0.0,
+	streaming: true,
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+const agent = new Agent(task, llm, { messageContext: "Additional information about the task" });
+agent.run();
+```
+
+## Run with planner model
+
+You can configure the agent to use a separate planner model for high-level task planning:
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	temperature: 0.0,
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+const planner_llm = new ChatOpenAI({
+	modelName: "o3-mini",
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+const task = "your task here";
+const agent = new Agent(task, llm, {
+	plannerLLM: planner_llm,
+	useVisionForPlanner: false,
+	plannerInterval: 4,
+});
+agent.run();
+
+```
+
+### Planner Parameters
+
+- `plannerLLM`: A LangChain chat model instance used for high-level task planning. Can be a smaller/cheaper model than the main LLM.
+- `useVisionForPlanner`: Enable/disable vision capabilities for the planner model. Defaults to `True`.
+- `plannerInterval`: Number of steps between planning phases. Defaults to `1`.
+
+Using a separate planner model can help:
+- Reduce costs by using a smaller model for high-level planning
+- Improve task decomposition and strategic thinking
+- Better handle complex, multi-step tasks
+
+<Note>
+  The planner model is optional. If not specified, the agent will not use the planner model.
+</Note>
+
+### Optional Parameters
+
+- `messageContext`: Additional information about the task to help the LLM understand the task better.
+- `initialActions`: List of initial actions to run before the main task.
+- `maxActionsPerStep`: Maximum number of actions to run in a step. Defaults to `10`.
+- `maxFailures`: Maximum number of failures before giving up. Defaults to `3`.
+- `retryDelay`: Time to wait between retries in seconds when rate limited. Defaults to `10`.
+- `generateGif`: Enable/disable GIF generation. Defaults to `False`. Set to `True` or a string path to save the GIF.

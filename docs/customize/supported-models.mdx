@@ -1,0 +1,226 @@
+---
+title: "Supported Models"
+description: "Guide to using different LangChain chat models with Browsernode"
+icon: "robot"
+---
+
+## Overview
+
+Browsernode supports various LangChain chat models. Here's how to configure and use the most popular ones. The full list is available in the [LangChain documentation](https://js.langchain.com/docs/integrations/chat/).
+
+## Model Recommendations
+
+We have yet to test performance across all models. Currently, we achieve the best results using GPT-4o with an 89% accuracy on the [WebVoyager Dataset](https://github.com/MinorJerry/WebVoyager). Gemini-2.5-flash is also gaining popularity in the community because it is currently free.
+We also support local models, like Qwen 2.5, but be aware that small models often return the wrong output structure-which lead to parsing errors. We believe that local models will improve significantly this year.
+
+
+<Note>
+  All models require their respective API keys. Make sure to set them in your
+  environment variables before running the agent.
+</Note>
+
+## Supported Models
+
+All LangChain chat models, which support tool-calling are available. We will document the most popular ones here.
+
+### OpenAI
+
+OpenAI's GPT-4o models are recommended for best performance.
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+// Initialize the model
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+// Create agent with the model
+const task = "Your task here";
+const agent = new Agent(task, llm);
+agent.run();
+```
+
+Required environment variables:
+
+```bash .env
+OPENAI_API_KEY=
+```
+
+### Anthropic
+
+```js
+import { ChatAnthropic } from "@langchain/anthropic";
+import { Agent } from "browsernode";
+
+// Initialize the model
+const llm = new ChatAnthropic({
+	modelName: "claude-3-5-sonnet-20240620",
+	anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+});
+// Create agent with the model
+const task = "Your task here";
+const agent = new Agent(task, llm);
+agent.run();
+```
+
+And add the variable:
+
+```bash .env
+ANTHROPIC_API_KEY=
+```
+
+### Azure OpenAI
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	temperature: 0.0,
+	streaming: false,
+	openAIApiKey: process.env.AZURE_OPENAI_KEY,
+	configuration: {
+		baseURL: process.env.AZURE_OPENAI_ENDPOINT,
+	},
+});
+
+const task = "Your task here";
+const agent = new Agent(task, llm);
+console.log("---azure_openai.ts agent run---");
+agent.run();
+```
+
+Required environment variables:
+
+```bash .env
+AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com/
+AZURE_OPENAI_KEY=
+```
+
+
+### Gemini
+
+```js
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { Agent } from "browsernode";
+
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+	throw new Error("GEMINI_API_KEY is not set");
+}
+const llm = new ChatGoogleGenerativeAI({
+	model: "models/gemini-2.5-flash-preview-05-20",
+	temperature: 0.0,
+	apiKey: process.env.GEMINI_API_KEY,
+});
+
+const task = "Your task here";
+
+const agent = new Agent(task, llm);
+const MAX_STEPS = 38;
+agent.run(MAX_STEPS);
+
+```
+
+Required environment variables:
+
+```bash .env
+GEMINI_API_KEY=
+```
+
+
+### DeepSeek-V3
+The community likes DeepSeek-V3 for its low price, no rate limits, open-source nature, and good performance.
+The example is available [here](https://github.com/leoning60/browsernode/blob/main/examples/models/deepseek.ts).
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "deepseek-chat",
+	temperature: 0.0,
+	streaming: false,
+	openAIApiKey: process.env.DEEPSEEK_API_KEY,
+	configuration: {
+		baseURL: "https://api.deepseek.com",
+	},
+});
+
+const task = "Your task here";
+const agent = new Agent(task, llm, {
+	useVision: false,
+});
+agent.run();
+```
+
+Required environment variables:
+
+```bash .env
+DEEPSEEK_API_KEY=
+```
+
+### DeepSeek-R1
+We support DeepSeek-R1. Its not fully tested yet, more and more functionality will be added, like e.g. the output of it'sreasoning content.
+The example is available [here](https://github.com/leoning60/browsernode/blob/main/examples/models/deepseek-r1.ts).
+It does not support vision. The model is open-source so you could also use it with Ollama, but we have not tested it.
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "deepseek-reasoner",
+	temperature: 0.0,
+	streaming: false,
+	openAIApiKey: process.env.DEEPSEEK_API_KEY,
+	configuration: {
+		baseURL: "https://api.deepseek.com",
+	},
+});
+
+const task = "Your task here";
+const agent = new Agent(task, llm, {
+	useVision: false,
+});
+agent.run();
+```
+
+Required environment variables:
+
+```bash .env
+DEEPSEEK_API_KEY=
+```
+
+### Ollama
+Many users asked for local models. Here they are.
+
+1. Download Ollama from [here](https://ollama.ai/download)
+2. Run `ollama pull model_name`. Pick a model which supports tool-calling from [here](https://ollama.com/search?c=tools)
+3. Run `ollama start`
+
+```js
+import { ChatOllama } from "@langchain/ollama";
+import { Agent } from "browsernode";
+
+// Initialize the model
+const llm = new ChatOllama({
+	model: "qwen3:32b",
+	numCtx: 64000,
+});
+
+// Create agent with the model and configure for Ollama
+const task = "Your task here";
+const agent = new Agent(task, llm);
+agent.run();
+```
+
+Required environment variables: None!
+
+## Coming soon
+(We are working on it)
+- Groq
+- Github
+- Fine-tuned models

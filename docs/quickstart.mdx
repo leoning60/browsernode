@@ -1,0 +1,74 @@
+---
+title: "Quickstart"
+description: "Start using Browsernode with this quickstart guide"
+icon: "rocket"
+---
+
+{/* You can install Browsernode from npm or clone it from Github. */}
+
+## Prepare the environment
+
+* [Node.js](https://nodejs.org/) (v22.12.0 or higher)
+* [npm](https://www.npmjs.com/) (v10.9.0 or higher)
+
+First, we recommend using [node.js](https://nodejs.org/) to setup the Node.js environment.
+
+```bash
+npm init -y
+```
+
+Install the dependencies:
+
+```bash
+npm install browsernode
+```
+
+Then install playwright:
+
+```bash
+npx playwright install
+```
+
+## Create an agent
+
+Then you can use the agent as follows:
+
+
+```javascript
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	streaming: true,
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+const task = "Search for the latest tesla stock price";
+const agent = new Agent(task, llm);
+agent.run();
+```
+
+## Set up your LLM API keys
+Add your API keys for the provider you want to use to your `.env` file.
+```bash
+mv .env.example .env
+```
+
+
+`ChatOpenAI` and other Langchain chat models require API keys. You should store these in your `.env` file. For example, for OpenAI and Anthropic, you can set the API keys in your `.env` file, such as:
+
+
+```bash .env
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+```
+
+For other LLM models you can refer to the [Langchain documentation](https://js.langchain.com/docs/integrations/chat/) to find how to set them up with their specific API keys.
+
+
+## Run the example
+
+```bash
+npx tsx examples/example.ts
+```

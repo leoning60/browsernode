@@ -1,0 +1,116 @@
+---
+title: "Introduction"
+description: "Welcome to Browsernode - We enable AI to control your browser"
+icon: "book-open"
+---
+
+<img className="block" src="/images/BrowserNode-Banner-Text-White-BG-narrow.png" alt="Browsernode" />
+
+## Overview
+
+Browsernode is the easiest way to connect your AI agents with the browser. It makes websites accessible for AI agents by providing a powerful, yet simple interface for browser automation.
+
+<Note>
+  If you have used Browsernode for your project, feel free to show it off in our
+  [Discord community](https://discord.gg/EDbST87x)!
+</Note>
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with Browsernode in minutes
+  </Card>
+  <Card
+    title="Supported Models"
+    icon="robot"
+    href="/customize/supported-models"
+  >
+    Configure different LLMs for your agents
+  </Card>
+  <Card title="Agent Settings" icon="gear" href="/customize/agent-settings">
+    Learn how to configure and customize your agents
+  </Card>
+  <Card title="Custom Functions" icon="code" href="/customize/custom-functions">
+    Extend functionality with custom actions
+  </Card>
+</CardGroup>
+
+## Fancy Demos
+
+### Writing in Google Docs
+
+Task: Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.
+
+<Frame>
+  <img src="https://github.com/user-attachments/assets/615a8581-7a08-4a7a-85ad-2ac8cebdf74c" />
+</Frame>
+
+### Saving to a txt file
+
+Task: look up the world's most valuable companies, save top 5 companies and their value to companies.txt.
+<Frame>
+<img src="https://github.com/user-attachments/assets/ac2e1fa6-f455-4f89-a710-877aebfcd590" />
+</Frame>
+
+
+```txt companies.txt
+1. Microsoft: $3.530 T
+2. NVIDIA: $3.462 T
+3. Apple: $2.934 T
+4. Amazon: $2.251 T
+5. Alphabet (Google): $2.125 T
+```
+
+### Navigating through Wikipedia
+
+Task: go to https://en.wikipedia.org/wiki/Banana and click on buttons on the wikipedia page to go as fast as possible from banna to Quantum mechanics
+
+<Frame>
+  <img src="https://github.com/user-attachments/assets/ae3ce541-a710-4941-a28a-6f26be704c9f" />
+</Frame>
+
+
+```json output:
+...
+...
+🛠️ Action 1/1: {
+  "clickElement": {
+    "index": 41
+  }
+}
+...
+...
+ 🛠️ Action 1/1: {
+"done": {
+    "success": false,
+    "text": "I navigated through the Banana Wikipedia page, reaching the section on Fusarium wilt TR4. However, I did not complete the task of reaching Quantum mechanics."
+  }
+...
+...
+📄 Result: I navigated through the Banana Wikipedia page, reaching the section on Fusarium wilt TR4. However, I did not complete the task of reaching Quantum mechanics.
+```
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card
+    title="Join Discord"
+    icon="discord"
+    href="https://discord.gg/EDbST87x"
+  >
+    Join our community for support and showcases
+  </Card>
+  <Card
+    title="GitHub"
+    icon="github"
+    href="https://github.com/leoning60/browsernode"
+  >
+    Star us on GitHub and contribute to development
+  </Card>
+</CardGroup>
+
+<Note>
+  Browsernode is MIT licensed and actively maintained. We welcome contributions
+  and feedback from the community!
+</Note>

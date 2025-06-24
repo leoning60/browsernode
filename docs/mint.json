@@ -1,0 +1,65 @@
+{
+	"$schema": "https://mintlify.com/schema.json",
+	"name": "Browsernode",
+	"logo": {
+		"dark": "./images/BrowserNode-Banner-Text-Black-BG-narrow.png",
+		"light": "./images/BrowserNode-Banner-Text-White-BG-narrow.png",
+		"href": "https://browsernode.com"
+	},
+	"favicon": "/favicon.svg",
+	"colors": {
+		"primary": "#F97316",
+		"light": "#FFF7ED",
+		"dark": "#C2410C",
+		"anchors": {
+			"from": "#F97316",
+			"to": "#FB923C"
+		},
+		"background": {
+			"dark": "#0D0A09"
+		}
+	},
+	"feedback": {
+		"thumbsRating": true,
+		"raiseIssue": true,
+		"suggestEdit": true
+	},
+	"topbarLinks": [
+		{
+			"name": "Github",
+			"url": "https://github.com/leoning60/browsernode"
+		},
+		{
+			"name": "Twitter",
+			"url": "https://x.com/leoning_ai"
+		}
+	],
+	"topbarCtaButton": {
+		"name": "Join Discord",
+		"url": "https://discord.gg/EDbST87x"
+	},
+	"navigation": [
+		{
+			"group": "Get Started",
+			"pages": ["introduction", "quickstart"]
+		},
+		{
+			"group": "Customize",
+			"pages": [
+				"customize/supported-models",
+				"customize/agent-settings",
+				"customize/browser-settings",
+				"customize/real-browser",
+				"customize/output-format",
+				"customize/system-prompt",
+				"customize/sensitive-data",
+				"customize/custom-functions"
+			]
+		}
+	],
+	"footerSocials": {
+		"x": "https://x.com/leoning_ai",
+		"github": "https://github.com/leoning60/browsernode",
+		"linkedin": "https://www.linkedin.com/"
+	}
+}

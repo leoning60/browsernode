@@ -1,0 +1,78 @@
+---
+title: "System Prompt"
+description: "Customize the system prompt to control agent behavior and capabilities"
+icon: "message"
+---
+
+## Overview
+
+You can customize the system prompt in two ways:
+
+1. Extend the default system prompt with additional instructions
+2. Override the default system prompt entirely
+
+<Note>
+  Custom system prompts allow you to modify the agent's behavior at a
+  fundamental level. Use this feature carefully as it can significantly impact
+  the agent's performance and reliability.
+</Note>
+
+### Extend System Prompt (recommended)
+
+To add additional instructions to the default system prompt:
+
+```js
+import { Agent } from "browsernode";
+import { ChatOpenAI } from "@langchain/openai";
+
+const extend_system_message = `
+REMEMBER the most important RULE:
+ALWAYS open first a new tab and go first to url wikipedia.com no matter the task!!!
+`;
+
+const task = "after open 3 tabs, end the task";
+const model = new ChatOpenAI({
+	modelName: "gpt-4o",
+	apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Create agent with extended system prompt
+const agent = new Agent(task, model, {
+	extendSystemMessage: extend_system_message,
+});
+agent.run();
+
+```
+
+### Override System Prompt
+
+<Warning>
+  Not recommended! If you must override the [default system
+  prompt](https://github.com/leoning60/browsernode/blob/main/src/agent/system_prompt.md),
+  make sure to test the agent yourself.
+</Warning>
+
+Anyway, to override the default system prompt:
+
+```js
+import { Agent } from "browsernode";
+import { ChatOpenAI } from "@langchain/openai";
+
+const override_system_message = `
+REMEMBER the most important RULE:
+ALWAYS open first a new tab and go first to url wikipedia.com no matter the task!!!
+`;
+
+const task = "after open 3 tabs, end the task";
+const model = new ChatOpenAI({
+	modelName: "gpt-4o",
+	apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Create agent with extended system prompt
+const agent = new Agent(task, model, {
+	overrideSystemMessage: override_system_message,
+});
+agent.run();
+
+```

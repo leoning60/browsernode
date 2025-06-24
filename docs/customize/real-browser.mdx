@@ -1,0 +1,56 @@
+---
+title: "Connect to your Browser"
+description: "With this you can connect to your real browser, where you are logged in with all your accounts."
+icon: "computer"
+---
+
+## Overview
+
+You can connect the agent to your real Chrome browser instance, allowing it to access your existing browser profile with all your logged-in accounts and settings. This is particularly useful when you want the agent to interact with services where you're already authenticated.
+
+<Note>
+  First make sure to close all running Chrome instances.
+</Note>
+
+## Basic Configuration
+
+To connect to your real Chrome browser, you'll need to specify the path to your Chrome executable when creating the Browser instance:
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { Agent, Browser, BrowserConfig } from "browsernode";
+
+const llm = new ChatOpenAI({
+	modelName: "gpt-4o",
+	temperature: 0.0,
+	streaming: true,
+	openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+const task = "Search for the latest nvidia stock price";
+// const task =" Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.";
+
+// Create browser configuration
+const config = new BrowserConfig({
+	headless: false, // Make sure the browser is visible
+	browserClass: "chromium", // Use Chrome/Chromium
+	browserInstancePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // Path to Chrome on macOS
+	extraBrowserArgs: [
+		"--start-maximized",
+		"--user-data-dir=/tmp/chrome-browsernode", // Use a separate user data directory
+		"--download-path=/tmp/chrome-browsernode/Downloads",
+	], // Optional: start with maximized window
+	forceKeepBrowserAlive: true, // Add this option to prevent closing browser when using existing instance
+});
+
+const agent = new Agent(task, llm, {
+	browser: new Browser(config),
+});
+// Run the agent task and handle process termination
+await agent.run();
+```
+
+
+<Note>
+  When using your real browser, the agent will have access to all your logged-in sessions. Make sure to ALWAYS review the task you're giving to the agent and ensure it aligns with your security requirements!
+</Note>
