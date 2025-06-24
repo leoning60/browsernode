@@ -10,7 +10,6 @@ const llm = new ChatOpenAI({
 
 const task = "Search for the latest tesla stock price";
 // const task ="Go to https://search.brave.com/ and search for 'node.js', then click the first link";
-// const task = "Search for the latest nvidia stock price";
 
 // Function to detect the default Chrome path on macOS
 function getDefaultChromePath(): string {

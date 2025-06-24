@@ -9,5 +9,5 @@ const llm = new ChatOpenAI({
 
 const task = "Search for the latest tesla stock price";
 const agent = new Agent(task, llm);
-console.log("---simple.ts agent run---");
+console.log("---example.ts agent run---");
 agent.run();
