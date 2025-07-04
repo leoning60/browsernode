@@ -18,6 +18,7 @@
 	"exclude": [
 		"src/**/*.test.ts",
 		"src/**/test/**/*",
+		"src/dom/buildDomTree.js",
 		"examples",
 		"eval",
 		"docs"
