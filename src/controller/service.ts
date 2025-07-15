@@ -78,7 +78,9 @@ export class Controller<T = Context> {
 		if (outputModel !== null) {
 			this.registry.action(
 				"Complete task - with return text and if the task is finished (success=True) or not yet completely finished (success=False), because last step is reached",
-				StructuredOutputAction,
+				{
+					paramModel: StructuredOutputAction,
+				},
 			)(async function done(params: z.infer<typeof StructuredOutputAction>) {
 				return new ActionResult({
 					isDone: true,
@@ -90,7 +92,9 @@ export class Controller<T = Context> {
 			// If no output model is specified, use the default DoneAction model
 			this.registry.action(
 				"Complete task - provide a summary of results for the user. Set success=True if task completed successfully, false otherwise. Text should be your response to the user summarizing results. Include files you would like to display to the user in filesToDisplay.",
-				DoneAction,
+				{
+					paramModel: DoneAction,
+				},
 			)(
 				async (
 					params: z.infer<typeof DoneAction>,
@@ -153,7 +157,9 @@ export class Controller<T = Context> {
 		// Basic Navigation Actions
 		this.registry.action(
 			"Search the query in Google, the query should be a search query like humans search in Google, concrete and not vague or super long.",
-			SearchGoogleAction,
+			{
+				paramModel: SearchGoogleAction,
+			},
 		)(async function searchGoogle(
 			params: z.infer<typeof SearchGoogleAction>,
 			browserSession: BrowserSession,
@@ -178,7 +184,9 @@ export class Controller<T = Context> {
 
 		this.registry.action(
 			"Navigate to URL, set newTab=true to open in new tab, false to navigate in current tab",
-			GoToUrlAction,
+			{
+				paramModel: GoToUrlAction,
+			},
 		)(async function goToUrl(
 			params: z.infer<typeof GoToUrlAction>,
 			browserSession: BrowserSession,
@@ -235,10 +243,9 @@ export class Controller<T = Context> {
 			}
 		});
 
-		this.registry.action(
-			"Go back",
-			NoParamsAction,
-		)(async function goBack(
+		this.registry.action("Go back", {
+			paramModel: NoParamsAction,
+		})(async function goBack(
 			_: z.infer<typeof NoParamsAction>,
 			browserSession: BrowserSession,
 		) {
@@ -267,10 +274,9 @@ export class Controller<T = Context> {
 		});
 
 		// Element Interaction Actions
-		this.registry.action(
-			"Click element by index",
-			ClickElementAction,
-		)(async function clickElementByIndex(
+		this.registry.action("Click element by index", {
+			paramModel: ClickElementAction,
+		})(async function clickElementByIndex(
 			params: z.infer<typeof ClickElementAction>,
 			browserSession: BrowserSession,
 		) {
@@ -376,7 +382,9 @@ export class Controller<T = Context> {
 
 		this.registry.action(
 			"Click and input text into a input interactive element",
-			InputTextAction,
+			{
+				paramModel: InputTextAction,
+			},
 		)(async function inputText(
 			params: z.infer<typeof InputTextAction>,
 			browserSession: BrowserSession,
@@ -420,10 +428,9 @@ export class Controller<T = Context> {
 			});
 		});
 
-		this.registry.action(
-			"Upload file to interactive element with file path",
-			UploadFileAction,
-		)(async function uploadFile(
+		this.registry.action("Upload file to interactive element with file path", {
+			paramModel: UploadFileAction,
+		})(async function uploadFile(
 			params: z.infer<typeof UploadFileAction>,
 			browserSession: BrowserSession,
 			pageExtractionLlm?: BaseChatModel,
@@ -474,10 +481,9 @@ export class Controller<T = Context> {
 		});
 
 		// Tab Management Actions
-		this.registry.action(
-			"Switch tab",
-			SwitchTabAction,
-		)(async function switchTab(
+		this.registry.action("Switch tab", {
+			paramModel: SwitchTabAction,
+		})(async function switchTab(
 			params: z.infer<typeof SwitchTabAction>,
 			browserSession: BrowserSession,
 		) {
@@ -497,10 +503,9 @@ export class Controller<T = Context> {
 			});
 		});
 
-		this.registry.action(
-			"Close an existing tab",
-			CloseTabAction,
-		)(async function closeTab(
+		this.registry.action("Close an existing tab", {
+			paramModel: CloseTabAction,
+		})(async function closeTab(
 			params: z.infer<typeof CloseTabAction>,
 			browserSession: BrowserSession,
 		) {
@@ -522,7 +527,9 @@ export class Controller<T = Context> {
 		// Scroll Actions
 		this.registry.action(
 			"Scroll the page by one page (set down=true to scroll down, down=false to scroll up)",
-			ScrollAction,
+			{
+				paramModel: ScrollAction,
+			},
 		)(async function scroll(
 			params: z.infer<typeof ScrollAction>,
 			browserSession: BrowserSession,
@@ -562,7 +569,9 @@ export class Controller<T = Context> {
 		// Send Keys Actions
 		this.registry.action(
 			"Send strings of special keys to use Playwright page.keyboard.press - examples include Escape, Backspace, Insert, PageDown, Delete, Enter, or Shortcuts such as `Control+o`, `Control+Shift+T`",
-			SendKeysAction,
+			{
+				paramModel: SendKeysAction,
+			},
 		)(async function sendKeys(
 			params: z.infer<typeof SendKeysAction>,
 			browserSession: BrowserSession,
