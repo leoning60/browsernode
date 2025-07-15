@@ -1,21 +1,30 @@
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import RateLimitError from "openai";
 import { v4 as uuid } from "uuid";
 import { Logger } from "winston";
 import { z } from "zod";
-import { MessageManagerState } from "../agent/message_manager/views";
+
+import fs from "fs";
+import path from "path";
 import type { BrowserStateHistory } from "../browser/views";
-import type { ActionModel } from "../controller/registry/views";
+import { ActionModel } from "../controller/registry/views";
 import { HistoryTreeProcessor } from "../dom/history_tree_processor/service";
 import { DOMHistoryElement } from "../dom/history_tree_processor/view";
 import type { DOMElementNode } from "../dom/views";
 
-import type path from "path";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { modelDump } from "../bn_utils";
 import type { SelectorMap } from "../dom/views";
+import type { FileSystemState } from "../filesystem/file_system";
+import type { BaseChatModel } from "../llm/base";
 import bnLogger from "../logging_config";
+import type { UsageSummary } from "../tokens/views";
+import { MessageManagerState } from "./message_manager/views";
 
-// 工具调用方法类型定义
+// Generic type for structured output, equivalent to Python's TypeVar('AgentStructuredOutput', bound=BaseModel)
+type AgentStructuredOutput<
+	T extends Record<string, any> = Record<string, any>,
+> = T;
+
 type ToolCallingMethod =
 	| "functionCalling"
 	| "jsonMode"
@@ -25,9 +34,12 @@ type ToolCallingMethod =
 
 // Configure Winston logger
 const logger: Logger = bnLogger.child({
-	module: "browser_node/agent/views",
+	module: "browsernode/agent/views",
 });
 
+/**
+ * Configuration options for the Agent
+ */
 class AgentSettings {
 	useVision: boolean = true;
 	useVisionForPlanner: boolean = false;
@@ -35,7 +47,6 @@ class AgentSettings {
 	saveConversationPathEncoding?: string = "utf-8";
 	maxFailures: number = 1;
 	retryDelay: number = 10;
-	maxInputTokens: number = 128000;
 	validateOutput: boolean = false;
 	messageContext?: string;
 	generateGif: boolean | string = false;
@@ -54,43 +65,28 @@ class AgentSettings {
 		"alt",
 		"aria-expanded",
 	];
-
 	maxActionsPerStep: number = 10;
-	toolCallingMethod?: ToolCallingMethod = "auto";
+	useThinking: boolean = true;
+	maxHistoryItems: number = 40;
+
 	pageExtractionLLM?: BaseChatModel;
-	plannerLLM?: BaseChatModel | null;
-	plannerInterval: number = 1;
+	plannerLLM?: BaseChatModel;
+	plannerInterval: number = 1; // Run planner every N steps
+	isPlannerReasoning: boolean = false;
+	extendPlannerSystemMessage?: string;
+	calculateCost: boolean = false;
+
+	// Legacy properties for backward compatibility
+	// toolCallingMethod?: ToolCallingMethod = "auto";
 
 	constructor(settings: Partial<AgentSettings> = {}) {
 		Object.assign(this, settings);
 	}
 }
 
-interface AgentHistoryList {
-	history: AgentHistory[];
-
-	totalDurationSeconds(): number;
-	totalInputTokens(): number;
-	inputTokenUsage(): number[];
-	saveToFile(filepath: string): void;
-	lastAction(): any | null;
-	errors(): (string | null)[];
-	finalResult(): string | null;
-	isDone(): boolean;
-	isSuccessful(): boolean | null;
-	hasErrors(): boolean;
-	urls(): (string | null)[];
-	screenshots(): (string | null)[];
-	actionNames(): string[];
-	modelThoughts(): AgentBrain[];
-	modelOutputs(): AgentOutput[];
-	modelActions(): any[];
-	actionResults(): ActionResult[];
-	extractedContent(): string[];
-	modelActionsFiltered(include?: string[]): any[];
-	numberOfSteps(): number;
-}
-
+/**
+ * Holds all state information for an Agent
+ */
 class AgentState {
 	agentId: string;
 	nSteps: number;
@@ -98,9 +94,11 @@ class AgentState {
 	lastResult: ActionResult[] | null;
 	history: AgentHistoryList;
 	lastPlan: string | null;
+	lastModelOutput: AgentOutput | null;
 	paused: boolean;
 	stopped: boolean;
 	messageManagerState: MessageManagerState;
+	fileSystemState: FileSystemState | null;
 
 	constructor(
 		params: {
@@ -110,21 +108,25 @@ class AgentState {
 			lastResult?: ActionResult[] | null;
 			history?: AgentHistoryList;
 			lastPlan?: string | null;
+			lastModelOutput?: AgentOutput | null;
 			paused?: boolean;
 			stopped?: boolean;
 			messageManagerState?: MessageManagerState;
+			fileSystemState?: any | null;
 		} = {},
 	) {
 		this.agentId = params.agentId ?? uuid();
 		this.nSteps = params.nSteps ?? 1;
 		this.consecutiveFailures = params.consecutiveFailures ?? 0;
 		this.lastResult = params.lastResult ?? null;
-		this.history = params.history ?? new AgentHistoryList([]);
+		this.history = params.history ?? new AgentHistoryList([], null);
 		this.lastPlan = params.lastPlan ?? null;
+		this.lastModelOutput = params.lastModelOutput ?? null;
 		this.paused = params.paused ?? false;
 		this.stopped = params.stopped ?? false;
 		this.messageManagerState =
 			params.messageManagerState ?? new MessageManagerState();
+		this.fileSystemState = params.fileSystemState ?? null;
 	}
 }
 
@@ -137,85 +139,185 @@ class AgentStepInfo {
 		this.maxSteps = maxSteps;
 	}
 
+	/**
+	 * Check if this is the last step
+	 */
 	isLastStep(): boolean {
 		return this.stepNumber >= this.maxSteps - 1;
 	}
 }
 
+/**
+ * Result of executing an action
+ */
 class ActionResult {
+	// For done action
 	isDone?: boolean = false;
 	success?: boolean | null = null;
-	extractedContent?: string | null = null;
-	error?: string | null = "";
-	includeInMemory: boolean = false;
 
-	constructor(params: {
-		isDone?: boolean;
-		success?: boolean;
-		extractedContent?: string;
-		error?: string;
-		includeInMemory?: boolean;
-	}) {
-		this.isDone = params.isDone;
-		this.success = params.success;
-		this.extractedContent = params.extractedContent;
-		this.error = params.error;
+	// Error handling - always include in long term memory
+	error?: string | null = null;
+
+	// Files
+	attachments?: string[] | null = null; // Files to display in the done message
+
+	// Always include in long term memory
+	longTermMemory?: string | null = null; // Memory of this action
+
+	// if updateOnlyReadState is True we add the extractedContent to the agent context only once for the next step
+	// if updateOnlyReadState is False we add the extractedContent to the agent long term memory if no longTermMemory is provided
+	extractedContent?: string | null = null;
+	includeExtractedContentOnlyOnce?: boolean = false; // Whether the extracted content should be used to update the read_state
+
+	// Deprecated
+	includeInMemory: boolean = false; // whether to include in extractedContent inside longTermMemory
+
+	constructor(
+		params: {
+			isDone?: boolean;
+			success?: boolean | null;
+			error?: string | null;
+			attachments?: string[] | null;
+			longTermMemory?: string | null;
+			extractedContent?: string | null;
+			includeExtractedContentOnlyOnce?: boolean;
+			includeInMemory?: boolean;
+		} = {},
+	) {
+		this.isDone = params.isDone ?? false;
+		this.success = params.success ?? null;
+		this.error = params.error ?? null;
+		this.attachments = params.attachments ?? null;
+		this.longTermMemory = params.longTermMemory ?? null;
+		this.extractedContent = params.extractedContent ?? null;
+		this.includeExtractedContentOnlyOnce =
+			params.includeExtractedContentOnlyOnce ?? false;
 		this.includeInMemory = params.includeInMemory ?? false;
+
+		// Validate success requires done
+		if (this.success === true && this.isDone !== true) {
+			throw new Error(
+				"success=true can only be set when isDone=true. " +
+					"For regular actions that succeed, leave success as null. " +
+					"Use success=false only for actions that fail.",
+			);
+		}
 	}
 }
 
+/**
+ * Metadata for a single step including timing and token information
+ */
 class StepMetadata {
 	stepStartTime: number;
 	stepEndTime: number;
-	inputTokens: number;
 	stepNumber: number;
 
-	constructor(
-		stepStartTime: number,
-		stepEndTime: number,
-		inputTokens: number,
-		stepNumber: number,
-	) {
+	constructor(stepStartTime: number, stepEndTime: number, stepNumber: number) {
 		this.stepStartTime = stepStartTime;
 		this.stepEndTime = stepEndTime;
-		this.inputTokens = inputTokens;
 		this.stepNumber = stepNumber;
 	}
+
+	/**
+	 * Calculate step duration in seconds
+	 */
 	get durationSeconds(): number {
 		return this.stepEndTime - this.stepStartTime;
 	}
 }
-// AgentBrain schema
+
+class AgentBrain {
+	thinking?: string | null = null;
+	evaluationPreviousGoal: string;
+	memory: string;
+	nextGoal: string;
+
+	constructor(
+		evaluationPreviousGoal: string,
+		memory: string,
+		nextGoal: string,
+		thinking?: string | null,
+	) {
+		this.thinking = thinking;
+		this.evaluationPreviousGoal = evaluationPreviousGoal;
+		this.memory = memory;
+		this.nextGoal = nextGoal;
+	}
+}
+
+// AgentBrain schema for validation
 const AgentBrainSchema = z.object({
-	evaluationPreviousGoal: z.string().describe("Previous goal evaluation"),
-	memory: z.string().describe("Memory"),
-	nextGoal: z.string().describe("Next goal"),
+	thinking: z.string().optional().nullable(),
+	evaluationPreviousGoal: z
+		.string()
+		.describe(
+			"Success|Failed|Unknown with explanation of previous goal status",
+		),
+	memory: z
+		.string()
+		.describe(
+			"Description of what has been done and what needs to be remembered",
+		),
+	nextGoal: z.string().describe("What needs to be done next"),
 });
 
-type AgentBrain = z.infer<typeof AgentBrainSchema>;
-/**
- * Agent output model
- *
- * @dev note: This model is extended through custom actions in AgentService.
- * You can also use some fields that don't exist in this model as long as
- * they are registered in the DynamicActions model.
- */
-class AgentOutput {
-	currentState: AgentBrain;
-	action: ActionModel[];
+type AgentBrainType = z.infer<typeof AgentBrainSchema>;
 
-	constructor(currentState: AgentBrain, action: ActionModel[]) {
-		this.currentState = currentState;
+class AgentOutput {
+	thinking?: string | null = null;
+	evaluationPreviousGoal: string;
+	memory: string;
+	nextGoal: string;
+	action: ActionModel[]; // List of actions to execute
+
+	constructor(
+		evaluationPreviousGoal: string,
+		memory: string,
+		nextGoal: string,
+		action: ActionModel[],
+		thinking?: string | null,
+	) {
+		this.thinking = thinking;
+		this.evaluationPreviousGoal = evaluationPreviousGoal;
+		this.memory = memory;
+		this.nextGoal = nextGoal;
 		this.action = action;
+
+		// Ensure at least one action is provided
+		if (!action || action.length === 0) {
+			throw new Error("At least one action must be provided");
+		}
 	}
 
+	/**
+	 * For backward compatibility - returns an AgentBrain with the flattened properties
+	 */
+	get currentState(): AgentBrain {
+		return new AgentBrain(
+			this.evaluationPreviousGoal,
+			this.memory,
+			this.nextGoal,
+			this.thinking,
+		);
+	}
+
+	/**
+	 * Extend actions with custom actions
+	 */
 	static typeWithCustomActions(customActions: ActionModel): typeof AgentOutput {
 		return class CustomAgentOutput extends AgentOutput {
-			constructor(currentState: AgentBrain, outputAction: ActionModel[]) {
-				super(currentState, outputAction);
+			constructor(
+				evaluationPreviousGoal: string,
+				memory: string,
+				nextGoal: string,
+				action: ActionModel[],
+				thinking?: string | null,
+			) {
+				super(evaluationPreviousGoal, memory, nextGoal, action, thinking);
 				this.action =
-					outputAction.length > 0
-						? outputAction.map(() => {
+					action.length > 0
+						? action.map(() => {
 								return Object.create(
 									Object.getPrototypeOf(customActions),
 									Object.getOwnPropertyDescriptors(customActions),
@@ -228,8 +330,8 @@ class AgentOutput {
 								),
 							];
 
-				for (let i = 0; i < outputAction.length; i++) {
-					const llmAction = outputAction[i];
+				for (let i = 0; i < action.length; i++) {
+					const llmAction = action[i];
 					for (const key in llmAction) {
 						if (this.action[i]!.hasOwnProperty(key)) {
 							this.action[i]![key] = llmAction[key];
@@ -239,39 +341,83 @@ class AgentOutput {
 					}
 
 					for (const key in this.action[i]!) {
-						if (outputAction[i]!.hasOwnProperty(key)) {
-							this.action[i]![key] = outputAction[i]![key];
+						if (action[i]!.hasOwnProperty(key)) {
+							this.action[i]![key] = action[i]![key];
 						} else {
 							this.action[i]![key] = undefined;
 						}
 					}
 				}
 			}
+
+			// Add static method to generate JSON schema for SchemaOptimizer
+			static getJsonSchema(): Record<string, any> {
+				const zodSchema = AgentOutput.schemaWithCustomActions(customActions);
+				return zodToJsonSchema(zodSchema);
+			}
 		};
 	}
-	static schemaWithCustomActions(custom_actions: ActionModel): any {
-		// Create base schema structure exactly matching SimpleSchema
-		const schema = z.object({
-			currentState: z.object({
-				evaluationPreviousGoal: z
-					.string()
-					.describe(
-						"Success|Failed|Unknown with explanation of previous goal status",
-					),
-				memory: z
-					.string()
-					.describe(
-						"Description of what has been done and what needs to be remembered",
-					),
-				nextGoal: z.string().describe("What needs to be done next"),
-			}),
-			action: z.array(
-				z.object({}), // Will be populated with action properties dynamically
-			),
-		});
 
-		// Add action properties from custom_actions
-		if (custom_actions) {
+	/**
+	 * Extend actions with custom actions and exclude thinking field
+	 */
+	// TODO: complete this
+	static typeWithCustomActionsNoThinking(
+		customActions: ActionModel,
+	): typeof AgentOutput {
+		class AgentOutputNoThinking extends AgentOutput {
+			static schemaWithoutThinking(customActions: ActionModel): any {
+				const schema = AgentOutput.schemaWithCustomActions(customActions);
+				if (schema && schema.shape && schema.shape.thinking) {
+					delete schema.shape.thinking;
+				}
+				return schema;
+			}
+		}
+
+		return class CustomAgentOutputNoThinking extends AgentOutputNoThinking {
+			constructor(
+				evaluationPreviousGoal: string,
+				memory: string,
+				nextGoal: string,
+				outputAction: ActionModel[],
+			) {
+				super(evaluationPreviousGoal, memory, nextGoal, outputAction);
+			}
+
+			// Add static method to generate JSON schema for SchemaOptimizer
+			static getJsonSchema(): Record<string, any> {
+				const zodSchema =
+					AgentOutputNoThinking.schemaWithoutThinking(customActions);
+				return zodToJsonSchema(zodSchema);
+			}
+		};
+	}
+
+	static schemaWithCustomActions(customActions: ActionModel): any {
+		// Create base schema structure
+		const schema = z.object({
+			thinking: z.string().optional().nullable(),
+			evaluationPreviousGoal: z
+				.string()
+				.describe(
+					"Success|Failed|Unknown with explanation of previous goal status",
+				),
+			memory: z
+				.string()
+				.describe(
+					"Description of what has been done and what needs to be remembered",
+				),
+			nextGoal: z.string().describe("What needs to be done next"),
+			action: z
+				.array(
+					z.object({}), // Will be populated with action properties dynamically
+				)
+				.min(1)
+				.describe("List of actions to execute"),
+		});
+		// Add action properties from customActions
+		if (customActions) {
 			// Create object shape for actions
 			const actionProperties: Record<
 				string,
@@ -279,21 +425,21 @@ class AgentOutput {
 			> = {};
 
 			// Generate properties for each action
-			for (const [actionName, paramModel] of Object.entries(custom_actions)) {
+			for (const [actionName, paramModel] of Object.entries(customActions)) {
 				// Make sure paramModel.paramModel is a Zod schema and convert to optional
 				if (paramModel && paramModel.paramModel) {
 					actionProperties[actionName] = paramModel.paramModel.optional();
 				}
 			}
-
 			// Set the array item type to be an object with all possible action properties
-			schema.shape.action = z.array(z.object(actionProperties));
+			schema.shape.action = z.array(z.object(actionProperties)).min(1);
 		}
 		return schema;
 	}
 }
+
 /**
- * Agent action history item
+ * History item for agent actions
  */
 class AgentHistory {
 	modelOutput: AgentOutput | null; // Model output
@@ -338,20 +484,71 @@ class AgentHistory {
 		}
 		return elements;
 	}
+
+	/**
+	 * Custom serialization handling circular references
+	 */
+	modelDump(excludeNone: boolean = true): Record<string, any> {
+		// Handle action serialization
+		let modelOutputDump: Record<string, any> | null = null;
+		if (this.modelOutput) {
+			const actionDump = this.modelOutput.action.map((action) =>
+				modelDump(action, excludeNone),
+			);
+			modelOutputDump = {
+				evaluationPreviousGoal: this.modelOutput.evaluationPreviousGoal,
+				memory: this.modelOutput.memory,
+				nextGoal: this.modelOutput.nextGoal,
+				action: actionDump, // This preserves the actual action data
+				thinking: this.modelOutput.thinking,
+			};
+		}
+
+		const result = {
+			modelOutput: modelOutputDump,
+			result: this.result.map((r) => {
+				const dump: Record<string, any> = {};
+				for (const [key, value] of Object.entries(r)) {
+					if (!excludeNone || (value !== null && value !== undefined)) {
+						dump[key] = value;
+					}
+				}
+				return dump;
+			}),
+			state: this.state, // Assuming state has its own serialization method
+			metadata: this.metadata
+				? {
+						stepStartTime: this.metadata.stepStartTime,
+						stepEndTime: this.metadata.stepEndTime,
+						stepNumber: this.metadata.stepNumber,
+					}
+				: null,
+		};
+
+		return result;
+	}
 }
 
 /**
- * Agent history list
+ * List of AgentHistory messages, i.e. the history of the agent's actions and thoughts.
  */
-class AgentHistoryList {
+class AgentHistoryList<
+	T extends AgentStructuredOutput = AgentStructuredOutput,
+> {
 	history: AgentHistory[]; // History list
+	usage: UsageSummary | null;
 
-	constructor(history: AgentHistory[]) {
+	_outputModelSchema?: new (
+		...args: any[]
+	) => T | null; // Type for structured output
+
+	constructor(history: AgentHistory[], usage: UsageSummary | null = null) {
 		this.history = history;
+		this.usage = usage;
 	}
 
 	/**
-	 * Get total duration in seconds for all steps
+	 * Get total duration of all steps in seconds
 	 */
 	totalDurationSeconds(): number {
 		let total = 0.0;
@@ -364,70 +561,64 @@ class AgentHistoryList {
 	}
 
 	/**
-	 * Get total token count used by all steps.
-	 * Note: These are approximate token counts from the message manager.
-	 * For accurate token counts, use tools like LangChain Smith or OpenAI's token counter.
+	 * Return the number of history items
 	 */
-	totalInputTokens(): number {
-		let total = 0;
-		for (const h of this.history) {
-			if (h.metadata) {
-				total += h.metadata.inputTokens;
-			}
-		}
-		return total;
-	}
-
-	/**
-	 * Get token usage for each step
-	 */
-	inputTokenUsage(): number[] {
-		return this.history
-			.filter((h) => h.metadata)
-			.map((h) => h.metadata!.inputTokens);
+	get length(): number {
+		return this.history.length;
 	}
 
 	toString(): string {
-		return `AgentHistoryList(all_results=${this.actionResults()}, all_model_outputs=${this.modelActions()})`;
+		return `AgentHistoryList(allResults=${JSON.stringify(this.actionResults())}, allModelOutputs=${JSON.stringify(this.modelActions())})`;
 	}
 
 	/**
 	 * Save history to JSON file with proper serialization
 	 */
-	async saveToFile(filepath: string | typeof path): Promise<void> {
+	async saveToFile(filepath: string): Promise<void> {
 		try {
-			// Note: Path handling would need to be implemented or use a file system library
-			// This assumes a Node.js environment - browser would need different implementation
-			const fs = require("fs");
-			const path = require("path");
-
 			const dir = path.dirname(filepath);
 			if (!fs.existsSync(dir)) {
 				fs.mkdirSync(dir, { recursive: true });
 			}
 
-			fs.writeFileSync(filepath, JSON.stringify(this, null, 2), "utf-8");
+			const data = this.modelDump();
+			fs.writeFileSync(filepath, JSON.stringify(data, null, 2), "utf-8");
 		} catch (e) {
 			throw e;
 		}
 	}
 
 	/**
+	 * Custom serialization that properly uses AgentHistory's modelDump
+	 */
+	modelDump(excludeNone: boolean = true): Record<string, any> {
+		return {
+			history: this.history.map((h) => h.modelDump(excludeNone)),
+			usage: this.usage,
+		};
+	}
+
+	/**
 	 * Load history from JSON file
 	 */
 	static async loadFromFile(
-		filepath: string | typeof path,
-		outputModel: AgentOutput,
+		filepath: string,
+		outputModel: typeof AgentOutput,
 	): Promise<AgentHistoryList> {
-		// This assumes a Node.js environment
-		const fs = require("fs");
 		const data = JSON.parse(fs.readFileSync(filepath, "utf-8"));
 
-		// Loop through history and validate output_model actions to enrich with custom actions
+		// Loop through history and validate outputModel actions to enrich with custom actions
 		for (const h of data.history) {
 			if (h.modelOutput) {
 				if (typeof h.modelOutput === "object" && h.modelOutput !== null) {
-					h.modelOutput = h.modelOutput as AgentOutput; // 直接断言
+					// Convert back to AgentOutput instance
+					h.modelOutput = new outputModel(
+						h.modelOutput.evaluationPreviousGoal,
+						h.modelOutput.memory,
+						h.modelOutput.nextGoal,
+						h.modelOutput.action,
+						h.modelOutput.thinking,
+					);
 				} else {
 					h.modelOutput = null;
 				}
@@ -437,21 +628,24 @@ class AgentHistoryList {
 			}
 		}
 
-		// Assume there's a static method to validate the model
-		return new AgentHistoryList(data.history as AgentHistory[]);
+		return new AgentHistoryList(data.history as AgentHistory[], data.usage);
 	}
 
 	/**
 	 * Last action in history
 	 */
 	lastAction(): Record<string, any> | null {
-		const lastModelOutput = this.history[this.history.length - 1]?.modelOutput;
-		return lastModelOutput
-			? modelDump(
-					lastModelOutput.action[lastModelOutput.action.length - 1],
-					true,
-				)
-			: null;
+		if (
+			this.history.length > 0 &&
+			this.history[this.history.length - 1]?.modelOutput
+		) {
+			const lastModelOutput =
+				this.history[this.history.length - 1]!.modelOutput!;
+			const lastAction =
+				lastModelOutput.action[lastModelOutput.action.length - 1];
+			return modelDump(lastAction, true);
+		}
+		return null;
 	}
 
 	/**
@@ -472,12 +666,15 @@ class AgentHistoryList {
 	 * Final result from history
 	 */
 	finalResult(): string | null {
-		const lastItem =
-			this.history.length > 0
-				? this.history[this.history.length - 1]
-				: undefined;
-		if (lastItem?.result && lastItem.result.length > 0) {
-			const lastResult = lastItem.result[lastItem.result.length - 1];
+		if (
+			this.history.length > 0 &&
+			this.history[this.history.length - 1]?.result.length &&
+			this.history[this.history.length - 1]!.result.length > 0
+		) {
+			const lastResult =
+				this.history[this.history.length - 1]!.result[
+					this.history[this.history.length - 1]!.result.length - 1
+				];
 			return lastResult?.extractedContent || null;
 		}
 		return null;
@@ -487,12 +684,15 @@ class AgentHistoryList {
 	 * Check if the agent is done
 	 */
 	isDone(): boolean {
-		const lastItem =
-			this.history.length > 0
-				? this.history[this.history.length - 1]
-				: undefined;
-		if (lastItem?.result && lastItem.result.length > 0) {
-			const lastResult = lastItem.result[lastItem.result.length - 1];
+		if (
+			this.history.length > 0 &&
+			this.history[this.history.length - 1]?.result.length &&
+			this.history[this.history.length - 1]!.result.length > 0
+		) {
+			const lastResult =
+				this.history[this.history.length - 1]!.result[
+					this.history[this.history.length - 1]!.result.length - 1
+				];
 			return lastResult?.isDone === true;
 		}
 		return false;
@@ -503,12 +703,15 @@ class AgentHistoryList {
 	 * Returns null if not done yet.
 	 */
 	isSuccessful(): boolean | null {
-		const lastItem =
-			this.history.length > 0
-				? this.history[this.history.length - 1]
-				: undefined;
-		if (lastItem?.result && lastItem.result.length > 0) {
-			const lastResult = lastItem.result[lastItem.result.length - 1];
+		if (
+			this.history.length > 0 &&
+			this.history[this.history.length - 1]?.result.length &&
+			this.history[this.history.length - 1]!.result.length > 0
+		) {
+			const lastResult =
+				this.history[this.history.length - 1]!.result[
+					this.history[this.history.length - 1]!.result.length - 1
+				];
 			if (lastResult?.isDone === true) {
 				return lastResult.success ?? null;
 			}
@@ -642,10 +845,23 @@ class AgentHistoryList {
 		return this.history.length;
 	}
 
-	// Additional method for model validation (placeholder)
-	static modelValidate(data: any): AgentHistoryList {
-		// Implementation would depend on your validation approach
-		return new AgentHistoryList(data.history);
+	/**
+	 * Get the structured output from the history
+	 *
+	 * @returns
+	 * Returns the structured output if both finalResult and _outputModelSchema are available,
+	 * otherwise null
+	 */
+	get structuredOutput(): AgentStructuredOutput | null {
+		const finalResult = this.finalResult();
+		if (finalResult !== null && this._outputModelSchema !== undefined) {
+			try {
+				return JSON.parse(finalResult) as AgentStructuredOutput;
+			} catch {
+				return null;
+			}
+		}
+		return null;
 	}
 }
 
@@ -653,43 +869,50 @@ class AgentHistoryList {
  * Container for agent error handling
  */
 class AgentError {
+	static readonly VALIDATION_ERROR: string =
+		"Invalid model output format. Please follow the correct schema.";
+	static readonly RATE_LIMIT_ERROR: string =
+		"Rate limit reached. Waiting before retry.";
 	static readonly NO_VALID_ACTION: string = "No valid action found";
 
+	/**
+	 * Format error message based on error type and optionally include trace
+	 */
 	static formatError(error: Error, includeTrace: boolean = false): string {
-		const errorInfo = [
-			`Error: ${error.name || "Unknown error"}`,
-			`Message: ${error.message}`,
-		];
+		const message = "";
 
-		if (error.stack) {
-			errorInfo.push(`Stacktrace:\n${error.stack}`);
+		// Check for validation errors (you might need to adapt this based on your validation library)
+		if (
+			error.name === "ValidationError" ||
+			error.message.includes("validation")
+		) {
+			return `${AgentError.VALIDATION_ERROR}\nDetails: ${error.message}`;
 		}
 
-		// Include additional properties from the error object
-		for (const [key, value] of Object.entries(error)) {
-			if (
-				key !== "name" &&
-				key !== "message" &&
-				key !== "stack" &&
-				typeof value !== "function"
-			) {
-				errorInfo.push(`${key}: ${JSON.stringify(value)}`);
-			}
+		// Check for rate limit errors
+		if (error instanceof RateLimitError) {
+			return AgentError.RATE_LIMIT_ERROR;
 		}
 
-		return errorInfo.join("\n");
+		if (includeTrace && error.stack) {
+			return `${error.message}\nStacktrace:\n${error.stack}`;
+		}
+
+		return error.message;
 	}
 }
 
 // Export the types and classes
 export {
+	type AgentStructuredOutput,
 	type ToolCallingMethod,
 	AgentSettings,
 	AgentState,
 	AgentStepInfo,
 	ActionResult,
 	StepMetadata,
-	type AgentBrain,
+	AgentBrain,
+	type AgentBrainType,
 	AgentOutput,
 	AgentHistory,
 	AgentHistoryList,

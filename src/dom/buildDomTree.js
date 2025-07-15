@@ -259,7 +259,7 @@
 			overlay.style.boxSizing = "border-box";
 
 			// Get element position
-			let iframeOffset = { x: 0, y: 0 };
+			const iframeOffset = { x: 0, y: 0 };
 
 			// If element is in an iframe, calculate iframe offset
 			if (parentIframe) {
@@ -309,7 +309,7 @@
 			// Update positions on scroll
 			const updatePositions = () => {
 				const newRect = element.getBoundingClientRect();
-				let newIframeOffset = { x: 0, y: 0 };
+				const newIframeOffset = { x: 0, y: 0 };
 
 				if (parentIframe) {
 					const iframeRect = parentIframe.getBoundingClientRect();
@@ -751,7 +751,7 @@
 		}
 
 		// Find the correct document context and root element
-		let doc = element.ownerDocument;
+		const doc = element.ownerDocument;
 
 		// If we're in an iframe, elements are considered top by default
 		if (doc !== window.document) {

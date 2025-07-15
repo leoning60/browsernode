@@ -15,7 +15,7 @@ const logFilename = path.join(logsDir, `${timestamp}.log`);
 const bnLogger: Logger = winston.createLogger({
 	level: "debug",
 	format: winston.format.combine(
-		winston.format.label({ label: "browser_node/logging_config" }),
+		winston.format.label({ label: "browsernode/logging_config" }),
 		winston.format.timestamp(),
 		winston.format.errors({ stack: true }),
 		winston.format.printf(({ level, message, timestamp, stack }) => {

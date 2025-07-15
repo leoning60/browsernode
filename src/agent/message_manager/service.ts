@@ -1,60 +1,154 @@
-import {
-	AIMessage,
+import type {
+	AssistantMessage,
 	BaseMessage,
-	HumanMessage,
+	ContentPartTextParam,
 	SystemMessage,
-	ToolMessage,
-} from "@langchain/core/messages";
-import winston from "winston";
+	UserMessage,
+} from "../../llm/messages";
+import {
+	createAssistantMessage,
+	createSystemMessage,
+	createUserMessage,
+	getMessageText,
+} from "../../llm/messages";
 
 import { modelDump } from "../../bn_utils";
+import type { BrowserStateSummary } from "../../browser/views";
+import type { FileSystem } from "../../filesystem/file_system";
 import bnLogger from "../../logging_config";
-import { timeExecution } from "../../utils";
-import { AgentMessagePrompt } from "../prompt";
-import type { AgentOutput } from "../views";
-import { MessageManagerState } from "./views";
+import { matchUrlWithDomainPattern } from "../../utils";
+import { timeExecution } from "../../utils_old";
+import { AgentMessagePrompt } from "../prompts";
+import type { ActionResult, AgentOutput, AgentStepInfo } from "../views";
+import { HistoryItem, MessageManagerState } from "./views";
 
 // Create logger
 const logger = bnLogger.child({
-	module: "browser_node/agent/message_manager/service",
+	module: "browsernode/agent/message_manager/service",
 });
 
-export class MessageManagerSettings {
-	maxInputTokens: number = 128000;
-	estimatedCharactersPerToken: number = 3;
-	imageTokens: number = 800;
-	includeAttributes: string[] = [];
-	messageContext?: string;
-	sensitiveData?: Record<string, string>;
-	availableFilePaths?: string[];
-	modelName?: string;
+// ========== Logging Helper Functions ==========
+// These functions are used ONLY for formatting debug log output.
+// They do NOT affect the actual message content sent to the LLM.
+// All logging functions start with _log_ for easy identification.
 
-	constructor(settings: Partial<MessageManagerSettings> = {}) {
-		Object.assign(this, settings);
+function _logGetMessageEmoji(message: BaseMessage): string {
+	/**Get emoji for a message type - used only for logging display*/
+	const emojiMap: Record<string, string> = {
+		UserMessage: "💬",
+		SystemMessage: "🧠",
+		AssistantMessage: "🔨",
+	};
+	return emojiMap[message.constructor.name] || "🎮";
+}
+
+function _logFormatMessageLine(
+	message: BaseMessage,
+	content: string,
+	isLastMessage: boolean,
+	terminalWidth: number,
+): string[] {
+	/**Format a single message for logging display*/
+	try {
+		const lines: string[] = [];
+
+		// Get emoji and token info
+		const emoji = _logGetMessageEmoji(message);
+		// TODO: fix the token count
+		const tokenStr = "??? (TODO)";
+		const prefix = `${emoji}[${tokenStr}]: `;
+
+		// Calculate available width (emoji=2 visual cols + [token]: =8 chars)
+		const contentWidth = terminalWidth - 10;
+
+		// Handle last message wrapping
+		if (isLastMessage && content.length > contentWidth) {
+			// Find a good break point
+			const breakPoint = content.lastIndexOf(" ", contentWidth);
+			let firstLine: string;
+			let rest: string;
+			if (breakPoint > contentWidth * 0.7) {
+				// Keep at least 70% of line
+				firstLine = content.substring(0, breakPoint);
+				rest = content.substring(breakPoint + 1);
+			} else {
+				// No good break point, just truncate
+				firstLine = content.substring(0, contentWidth);
+				rest = content.substring(contentWidth);
+			}
+
+			lines.push(prefix + firstLine);
+
+			// Second line with 10-space indent
+			if (rest) {
+				if (rest.length > terminalWidth - 10) {
+					rest = rest.substring(0, terminalWidth - 10);
+				}
+				lines.push(" ".repeat(10) + rest);
+			}
+		} else {
+			// Single line - truncate if needed
+			if (content.length > contentWidth) {
+				content = content.substring(0, contentWidth);
+			}
+			lines.push(prefix + content);
+		}
+
+		return lines;
+	} catch (e) {
+		logger.warn(`Failed to format message line for logging: ${e}`);
+		// Return a simple fallback line
+		return ["❓[   ?]: [Error formatting message]"];
 	}
 }
 
-// Create the MessageMetadata class since it's not exported from views.ts
-class MessageMetadata {
-	tokens: number = 0;
-}
+// ========== End of Logging Helper Functions ==========
 
 export class MessageManager {
-	task: string;
-	settings: MessageManagerSettings;
+	private task: string;
 	state: MessageManagerState;
 	systemPrompt: SystemMessage;
+	fileSystem: FileSystem;
+	sensitiveDataDescription: string = "";
+	availableFilePaths: string[] | null;
+	private useThinking: boolean;
+	private maxHistoryItems: number | null;
+
+	// Store settings as direct attributes instead of in a settings object
+	private includeAttributes: string[];
+	private messageContext: string | null;
+	private sensitiveData: Record<string, string | Record<string, string>> | null;
+	private lastInputMessages: BaseMessage[] = [];
 
 	constructor(params: {
 		task: string;
 		systemMessage: SystemMessage;
-		settings: Partial<MessageManagerSettings>;
-		state: MessageManagerState;
+		fileSystem: FileSystem;
+		availableFilePaths?: string[] | null;
+		state?: MessageManagerState;
+		useThinking?: boolean;
+		includeAttributes?: string[] | null;
+		messageContext?: string | null;
+		sensitiveData?: Record<string, string | Record<string, string>> | null;
+		maxHistoryItems?: number | null;
 	}) {
 		this.task = params.task;
-		this.settings = new MessageManagerSettings(params.settings);
-		this.state = params.state;
+		this.state = params.state || new MessageManagerState();
 		this.systemPrompt = params.systemMessage;
+		this.fileSystem = params.fileSystem;
+		this.availableFilePaths = params.availableFilePaths || null;
+		this.useThinking = params.useThinking ?? true;
+		this.maxHistoryItems = params.maxHistoryItems || null;
+
+		// Validate maxHistoryItems
+		if (this.maxHistoryItems !== null && this.maxHistoryItems <= 5) {
+			throw new Error("maxHistoryItems must be null or greater than 5");
+		}
+
+		// Store settings as direct attributes
+		this.includeAttributes = params.includeAttributes || [];
+		this.messageContext = params.messageContext || null;
+		this.sensitiveData = params.sensitiveData || null;
 
 		// Only initialize messages if state is empty
 		if (this.state.history.messages.length === 0) {
@@ -62,227 +156,344 @@ export class MessageManager {
 		}
 	}
 
-	private initMessages(): void {
-		/**
-		 * Initialize the message history with system message, context, task, and other initial messages
-		 */
-		this.addMessageWithTokens(this.systemPrompt);
-
-		if (this.settings.messageContext) {
-			const contextMessage = new HumanMessage(
-				"Context for the task" + this.settings.messageContext,
-			);
-			this.addMessageWithTokens(contextMessage);
+	/**Build agent history description from list of items, respecting maxHistoryItems limit*/
+	get agentHistoryDescription(): string {
+		if (this.maxHistoryItems === null) {
+			// Include all items
+			return this.state.agentHistoryItems
+				.map((item) => item.toString())
+				.join("\n");
 		}
 
-		const taskMessage = new HumanMessage(
-			`Your ultimate task is: """${this.task}""". If you achieved your ultimate task, stop everything and use the done action in the next step to complete the task. If not, continue as usual.`,
-		);
-		this.addMessageWithTokens(taskMessage);
+		const totalItems = this.state.agentHistoryItems.length;
 
-		if (this.settings.sensitiveData) {
-			let info = `Here are placeholders for sensitve data: ${Object.keys(
-				this.settings.sensitiveData,
-			)}`;
-			// Use different format for DeepSeek models to avoid HTML-like tags
-			if (
-				this.settings.modelName &&
-				this.settings.modelName.includes("deepseek")
-			) {
-				info += "\nTo use them, write [PLACEHOLDER:the_placeholder_name]";
-			} else {
-				info += "To use them, write <secret>the placeholder name</secret>";
-			}
-			const infoMessage = new HumanMessage(info);
-			this.addMessageWithTokens(infoMessage);
+		// If we have fewer items than the limit, just return all items
+		if (totalItems <= this.maxHistoryItems) {
+			return this.state.agentHistoryItems
+				.map((item) => item.toString())
+				.join("\n");
 		}
 
-		const placeholderMessage = new HumanMessage("Example output:");
-		this.addMessageWithTokens(placeholderMessage);
+		// We have more items than the limit, so we need to omit some
+		const omittedCount = totalItems - this.maxHistoryItems;
 
-		const toolCalls = [
-			{
-				name: "AgentOutput",
-				args: {
-					current_state: {
-						evaluation_previous_goal: "Success - I opend the first page",
-						memory: "Starting with the new task. I have completed 1/10 steps",
-						next_goal: "Click on company a",
-					},
-					action: [{ click_element: { index: 0 } }],
-				},
-				id: String(this.state.toolId),
-				type: "tool_call" as const,
-			},
+		// Show first item + omitted message + most recent (maxHistoryItems - 1) items
+		// The omitted message doesn't count against the limit, only real history items do
+		const recentItemsCount = this.maxHistoryItems - 1; // -1 for first item
+
+		const itemsToInclude = [
+			this.state.agentHistoryItems[0]?.toString() ?? "", // Keep first item (initialization)
+			`<sys>[... ${omittedCount} previous steps omitted...]</sys>`,
 		];
-
-		const exampleToolCall = new AIMessage({
-			content: "",
-			tool_calls: toolCalls,
-		});
-		this.addMessageWithTokens(exampleToolCall);
-		this.addToolMessage("Browser started");
-
-		const placeholderMemoryMessage = new HumanMessage(
-			"[Your task history memory starts here]",
+		// Add most recent items
+		itemsToInclude.push(
+			...this.state.agentHistoryItems
+				.slice(-recentItemsCount)
+				.map((item) => item.toString()),
 		);
-		this.addMessageWithTokens(placeholderMemoryMessage);
 
-		if (this.settings.availableFilePaths) {
-			const filepathsMsg = new HumanMessage(
-				`Here are file paths you can use: ${this.settings.availableFilePaths}`,
-			);
-			this.addMessageWithTokens(filepathsMsg);
+		return itemsToInclude.join("\n");
+	}
+
+	private initMessages(): void {
+		/**Initialize the message history with system message, context, task, and other initial messages*/
+		this.addMessageWithType(this.systemPrompt);
+
+		const placeholderMessage = createUserMessage(
+			"<example_1>\nHere is an example output of thinking and tool call. You can use it as a reference but do not copy it exactly.",
+			null,
+			true,
+		);
+		this.addMessageWithType(placeholderMessage);
+
+		// Create base example content
+		const exampleContent: Record<string, any> = {
+			evaluationPreviousGoal:
+				"Navigated to GitHub explore page. Verdict: Success",
+			memory:
+				"Found initial repositories such as bytedance/UI-TARS-desktop and ray-project/kuberay.",
+			nextGoal:
+				"Create todo.md checklist to track progress, initialize github.md for collecting information, and click on bytedance/UI-TARS-desktop.",
+			action: [
+				{
+					writeFile: {
+						path: "todo.md",
+						content:
+							"# Interesting Github Repositories in Explore Section\n\n## Tasks\n- [ ] Initialize a tracking file for GitHub repositories called github.md\n- [ ] Visit each Github repository and find their description\n- [ ] Visit bytedance/UI-TARS-desktop\n- [ ] Visit ray-project/kuberay\n- [ ] Check for additional Github repositories by scrolling down\n- [ ] Compile all results in the requested format\n- [ ] Validate that I have not missed anything in the page\n- [ ] Report final results to user",
+					},
+				},
+				{
+					writeFile: {
+						path: "github.md",
+						content: "# Github Repositories:\n",
+					},
+				},
+				{
+					clickElementByIndex: {
+						index: 4,
+					},
+				},
+			],
+		};
+
+		// Add thinking field only if useThinking is True
+		if (this.useThinking) {
+			exampleContent.thinking = `I have successfully navigated to https://github.com/explore and can see the page has loaded with a list of featured repositories. The page contains interactive elements and I can identify specific repositories like bytedance/UI-TARS-desktop (index [4]) and ray-project/kuberay (index [5]). The user's request is to explore GitHub repositories and collect information about them such as descriptions, stars, or other metadata. So far, I haven't collected any information.
+My navigation to the GitHub explore page was successful. The page loaded correctly and I can see the expected content.
+I need to capture the key repositories I've identified so far into my memory and into a file.
+Since this appears to be a multi-step task involving visiting multiple repositories and collecting their information, I need to create a structured plan in todo.md.
+After writing todo.md, I can also initialize a github.md file to accumulate the information I've collected.
+The file system actions do not change the browser state, so I can also click on the bytedance/UI-TARS-desktop (index [4]) to start collecting information.`;
 		}
+
+		const exampleToolCall1 = createAssistantMessage(
+			JSON.stringify(exampleContent),
+			null,
+			null,
+			undefined,
+			true,
+		);
+		this.addMessageWithType(exampleToolCall1);
+		this.addMessageWithType(
+			createUserMessage(
+				"Data written to todo.md.\nData written to github.md.\nClicked element with index 4.\n</example_1>",
+				null,
+				true,
+			),
+		);
 	}
 
 	addNewTask(newTask: string): void {
-		const content = `Your new ultimate task is: """${newTask}""". Take the previous context into account and finish your new ultimate task. `;
-		const msg = new HumanMessage(content);
-		this.addMessageWithTokens(msg);
 		this.task = newTask;
+		const taskUpdateItem = new HistoryItem({
+			systemMessage: `User updated <user_request> to: ${newTask}`,
+		});
+		this.state.agentHistoryItems.push(taskUpdateItem);
+	}
+
+	/**Update the agent history description*/
+	private updateAgentHistoryDescription(
+		modelOutput: AgentOutput | null = null,
+		result: ActionResult[] | null = null,
+		stepInfo: AgentStepInfo | null = null,
+	): void {
+		if (result === null) {
+			result = [];
+		}
+		const stepNumber = stepInfo?.stepNumber || null;
+
+		this.state.readStateDescription = "";
+
+		let actionResults = "";
+		const resultLen = result.length;
+		for (let idx = 0; idx < result.length; idx++) {
+			const actionResult = result[idx];
+			if (!actionResult) continue;
+
+			if (
+				actionResult.includeExtractedContentOnlyOnce &&
+				actionResult.extractedContent
+			) {
+				this.state.readStateDescription += actionResult.extractedContent + "\n";
+				logger.debug(
+					`Added extractedContent to readStateDescription: ${actionResult.extractedContent}`,
+				);
+			}
+
+			if (actionResult.longTermMemory) {
+				actionResults += `Action ${idx + 1}/${resultLen}: ${actionResult.longTermMemory}\n`;
+				logger.debug(
+					`Added longTermMemory to actionResults: ${actionResult.longTermMemory}`,
+				);
+			} else if (
+				actionResult.extractedContent &&
+				!actionResult.includeExtractedContentOnlyOnce
+			) {
+				actionResults += `Action ${idx + 1}/${resultLen}: ${actionResult.extractedContent}\n`;
+				logger.debug(
+					`Added extractedContent to actionResults: ${actionResult.extractedContent}`,
+				);
+			}
+
+			if (actionResult.error) {
+				actionResults += `Action ${idx + 1}/${resultLen}: ${actionResult.error.substring(0, 200)}\n`;
+				logger.debug(
+					`Added error to actionResults: ${actionResult.error.substring(0, 200)}`,
+				);
+			}
+		}
+
+		if (actionResults) {
+			actionResults = `Action Results:\n${actionResults}`;
+		}
+		const finalActionResults = actionResults.replace(/\n$/, "") || null;
+
+		// Build the history item
+		if (modelOutput === null) {
+			// Only add error history item if we have a valid step number
+			if (stepNumber !== null && stepNumber > 0) {
+				const historyItem = new HistoryItem({
+					stepNumber,
+					error: "Agent failed to output in the right format.",
+				});
+				this.state.agentHistoryItems.push(historyItem);
+			}
+		} else {
+			const historyItem = new HistoryItem({
+				stepNumber,
+				evaluationPreviousGoal: modelOutput.currentState.evaluationPreviousGoal,
+				memory: modelOutput.currentState.memory,
+				nextGoal: modelOutput.currentState.nextGoal,
+				actionResults: finalActionResults,
+			});
+			this.state.agentHistoryItems.push(historyItem);
+		}
+	}
+
+	private getSensitiveDataDescription(currentPageUrl: string): string {
+		const sensitiveData = this.sensitiveData;
+		if (!sensitiveData) {
+			return "";
+		}
+
+		// Collect placeholders for sensitive data
+		const placeholders = new Set<string>();
+
+		for (const [key, value] of Object.entries(sensitiveData)) {
+			if (typeof value === "object" && value !== null) {
+				// New format: {domain: {key: value}}
+				if (matchUrlWithDomainPattern(currentPageUrl, key, true)) {
+					Object.keys(value).forEach((k) => placeholders.add(k));
+				}
+			} else {
+				// Old format: {key: value}
+				placeholders.add(key);
+			}
+		}
+
+		if (placeholders.size > 0) {
+			const placeholderList = Array.from(placeholders).sort();
+			let info = `Here are placeholders for sensitive data:\n${JSON.stringify(placeholderList)}\n`;
+			info += "To use them, write <secret>the placeholder name</secret>";
+			return info;
+		}
+
+		return "";
 	}
 
 	@timeExecution("--addStateMessage")
 	addStateMessage(
-		state: any,
-		result?: any[],
-		stepInfo?: any,
-		useVision = true,
+		browserStateSummary: BrowserStateSummary,
+		modelOutput: AgentOutput | null = null,
+		result: ActionResult[] | null = null,
+		stepInfo: AgentStepInfo | null = null,
+		useVision: boolean = true,
+		pageFilteredActions: string | null = null,
+		sensitiveData: any = null,
 	): void {
-		/**
-		 * Add browser state as human message
-		 */
+		/**Add browser state as human message*/
 
-		// If keep in memory, add directly to history and add state without result
-		if (result) {
-			for (const r of result) {
-				if (r.includeInMemory) {
-					if (r.extractedContent) {
-						const msg = new HumanMessage(
-							"Action result: " + String(r.extractedContent),
-						);
-						this.addMessageWithTokens(msg);
-					}
-					if (r.error) {
-						// If endswith \n, remove it
-						let error = r.error;
-						if (error.endsWith("\n")) {
-							error = error.substring(0, error.length - 1);
-						}
-						// Get only last line of error
-						const lastLine = error.split("\n").pop() || "";
-						const msg = new HumanMessage("Action error: " + lastLine);
-						this.addMessageWithTokens(msg);
-					}
-					result = undefined; // If result in history, we don't want to add it again
-				}
-			}
+		this.updateAgentHistoryDescription(modelOutput, result, stepInfo);
+		if (sensitiveData) {
+			this.sensitiveDataDescription = this.getSensitiveDataDescription(
+				browserStateSummary.url,
+			);
 		}
-
-		// Otherwise add state message and result to next message (which will not stay in memory)
+		// otherwise add state message and result to next message (which will not stay in memory)
 		const stateMessage = new AgentMessagePrompt(
-			state,
-			result,
-			this.settings.includeAttributes || [],
-			stepInfo,
+			browserStateSummary,
+			this.fileSystem,
+			this.agentHistoryDescription,
+			this.state.readStateDescription,
+			this.task,
+			this.includeAttributes,
+			stepInfo ?? undefined,
+			pageFilteredActions,
+			40000, // maxClickableElementsLength
+			this.sensitiveDataDescription,
+			this.availableFilePaths,
 		).getUserMessage(useVision);
 
-		this.addMessageWithTokens(stateMessage);
+		this.addMessageWithType(stateMessage);
 	}
 
-	addModelOutput(modelOutput: AgentOutput): void {
-		/**
-		 * Add model output as AI message
-		 */
-		const toolCalls = [
-			{
-				name: "AgentOutput",
-				args: modelDump(modelOutput, true),
-				id: String(this.state.toolId),
-				type: "tool_call" as const,
-			},
-		];
-
-		const msg = new AIMessage({
-			content: "",
-			tool_calls: toolCalls,
-		});
-
-		this.addMessageWithTokens(msg);
-		// Empty tool response
-		this.addToolMessage("");
-	}
-
-	addPlan(plan?: string, position?: number): void {
-		if (plan) {
-			const msg = new AIMessage(plan);
-			this.addMessageWithTokens(msg, position);
+	addPlan(plan: string | null, position: number | null = null): void {
+		if (!plan) {
+			return;
 		}
+
+		const msg = createAssistantMessage(plan);
+		this.addMessageWithType(msg, position);
+	}
+
+	private logHistoryLines(): string {
+		/**Generate a formatted log string of message history for debugging / printing to terminal*/
+		// TODO: fix logging
+		return "";
 	}
 
 	@timeExecution("--getMessages")
 	getMessages(): BaseMessage[] {
-		/**
-		 * Get current message list, potentially trimmed to max tokens
-		 */
-		const messages = this.state.history.messages.map((m) => m.message);
+		/**Get current message list, potentially trimmed to max tokens*/
 
-		// Debug which messages are in history with token count
-		let totalInputTokens = 0;
-		logger.debug(`Messages in history: ${this.state.history.messages.length}:`);
-
-		for (const m of this.state.history.messages) {
-			totalInputTokens += m.metadata.tokens;
-			logger.debug(
-				`${m.message.constructor.name} - Token count: ${m.metadata.tokens}`,
-			);
-		}
-
-		logger.debug(`Total input tokens: ${totalInputTokens}`);
-		return messages;
+		// Log message history for debugging
+		logger.debug(this.logHistoryLines());
+		this.lastInputMessages = [...this.state.history.messages];
+		return this.lastInputMessages;
 	}
 
-	public addMessageWithTokens(message: BaseMessage, position?: number): void {
-		/**
-		 * Add message with token count metadata
-		 * position: undefined for last, -1 for second last, etc.
-		 */
-
-		// Filter out sensitive data from the message
-		if (this.settings.sensitiveData) {
+	/**
+	 * Add message to history
+	 * position: null for last, -1 for second last, etc.
+	 */
+	addMessageWithType(message: BaseMessage, position?: number | null): void {
+		// filter out sensitive data from the message
+		if (this.sensitiveData) {
 			message = this.filterSensitiveData(message);
 		}
 
-		const tokenCount = this.countTokens(message);
-		const metadata = new MessageMetadata();
-		metadata.tokens = tokenCount;
-		this.state.history.addMessage(message, metadata, position);
+		this.state.history.addMessage(message, position || undefined);
 	}
 
+	/**
+	 * Filter out sensitive data from the message
+	 */
 	@timeExecution("--filterSensitiveData")
 	private filterSensitiveData(message: BaseMessage): BaseMessage {
-		/**
-		 * Filter out sensitive data from the message
-		 */
 		const replaceSensitive = (value: string): string => {
-			if (!this.settings.sensitiveData) {
+			if (!this.sensitiveData) {
 				return value;
 			}
 
-			for (const [key, val] of Object.entries(this.settings.sensitiveData)) {
-				if (!val) {
-					continue;
+			// Collect all sensitive values, immediately converting old format to new format
+			const sensitiveValues: Record<string, string> = {};
+
+			// Process all sensitive data entries
+			for (const [keyOrDomain, content] of Object.entries(this.sensitiveData)) {
+				if (typeof content === "object" && content !== null) {
+					// Already in new format: {domain: {key: value}}
+					for (const [key, val] of Object.entries(content)) {
+						if (val) {
+							// Skip empty values
+							sensitiveValues[key] = val;
+						}
+					}
+				} else if (content) {
+					// Old format: {key: value} - convert to new format internally
+					// We treat this as if it was {'http*://*': {keyOrDomain: content}}
+					sensitiveValues[keyOrDomain] = content;
 				}
-				// Use different format for DeepSeek models
-				if (
-					this.settings.modelName &&
-					this.settings.modelName.includes("deepseek")
-				) {
-					value = value.replace(val, `[PLACEHOLDER:${key}]`);
-				} else {
-					value = value.replace(val, `<secret>${key}</secret>`);
-				}
+			}
+
+			// If there are no valid sensitive data entries, just return the original value
+			if (Object.keys(sensitiveValues).length === 0) {
+				logger.warn("No valid entries found in sensitiveData dictionary");
+				return value;
+			}
+
+			// Replace all valid sensitive data values with their placeholder tags
+			for (const [key, val] of Object.entries(sensitiveValues)) {
+				value = value.replace(val, `<secret>${key}</secret>`);
 			}
 
 			return value;
@@ -294,146 +505,18 @@ export class MessageManager {
 			for (let i = 0; i < message.content.length; i++) {
 				const item = message.content[i];
 				if (typeof item === "object" && item !== null && "text" in item) {
-					item.text = replaceSensitive(item.text as string);
+					(item as ContentPartTextParam).text = replaceSensitive(
+						(item as ContentPartTextParam).text,
+					);
 					message.content[i] = item;
 				}
 			}
 		}
-
 		return message;
 	}
 
-	private countTokens(message: BaseMessage): number {
-		/**
-		 * Count tokens in a message using the model's tokenizer
-		 */
-		let tokens = 0;
-
-		if (Array.isArray(message.content)) {
-			for (const item of message.content) {
-				if ("image_url" in item) {
-					tokens += this.settings.imageTokens || 800;
-				} else if (
-					typeof item === "object" &&
-					item !== null &&
-					"text" in item
-				) {
-					tokens += this.countTextTokens(item.text as string);
-				}
-			}
-		} else {
-			let msg = message.content as string;
-			if ("tool_calls" in message) {
-				msg += String((message as AIMessage).tool_calls);
-			}
-			tokens += this.countTextTokens(msg);
-		}
-
-		return tokens;
-	}
-
-	private countTextTokens(text: string): number {
-		/**
-		 * Count tokens in a text string
-		 */
-		// Rough estimate if no tokenizer available
-		const tokens = Math.floor(
-			text.length / (this.settings.estimatedCharactersPerToken || 3),
-		);
-		return tokens;
-	}
-
-	cutMessages(): boolean | null {
-		/**
-		 * Get current message list, potentially trimmed to max tokens
-		 */
-		const diff =
-			this.state.history.currentTokens -
-			(this.settings.maxInputTokens || 128000);
-		if (diff <= 0) {
-			return null;
-		}
-
-		if (this.state.history.messages.length === 0) {
-			return false;
-		}
-
-		const lastMsgIndex = this.state.history.messages.length - 1;
-		const lastMsg = this.state.history.messages[lastMsgIndex];
-
-		if (!lastMsg) {
-			return false;
-		}
-
-		// If list with image, remove image
-		if (Array.isArray(lastMsg.message.content)) {
-			// Iterate through content and remove image if exists
-			for (let i = 0; i < lastMsg.message.content.length; i++) {
-				const item = lastMsg.message.content[i];
-				if (typeof item === "object" && item !== null && "image_url" in item) {
-					lastMsg.message.content.splice(i, 1);
-					// Update token count
-					lastMsg.metadata.tokens -= this.settings.imageTokens || 800;
-					this.state.history.currentTokens -= this.settings.imageTokens || 800;
-					diff - (this.settings.imageTokens || 800);
-					return true;
-				}
-			}
-		}
-
-		// Remove the oldest non-system message
-		// Find oldest non-system message
-		let removedCount = 0;
-
-		for (let i = 0; i < this.state.history.messages.length; i++) {
-			if (i <= 1) {
-				continue;
-			}
-
-			const msg = this.state.history.messages[i];
-			if (!msg) continue;
-
-			// Never remove system message
-			if (msg.message instanceof SystemMessage) {
-				continue;
-			}
-
-			// Remove message
-			this.state.history.currentTokens -= msg.metadata.tokens;
-			this.state.history.messages.splice(i, 1);
-			removedCount += 1;
-			break;
-		}
-
-		if (removedCount > 0) {
-			return true;
-		}
-
-		// Failsafe: if we can't remove any more messages raise an error
-		if (diff > 0) {
-			throw new Error("Max token limit reached - history is too long");
-		}
-
-		return false;
-	}
-
-	public removeLastStateMessage(): void {
-		/**
-		 * Remove last state message from history
-		 */
+	/**Remove last state message from history*/
+	removeLastStateMessage(): void {
 		this.state.history.removeLastStateMessage();
-	}
-
-	addToolMessage(content: string): void {
-		/**
-		 * Add tool message to history
-		 */
-		const msg = new ToolMessage({
-			content: content,
-			tool_call_id: String(this.state.toolId),
-		});
-
-		this.addMessageWithTokens(msg);
-		this.state.toolId += 1;
 	}
 }

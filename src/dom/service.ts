@@ -1,32 +1,36 @@
 import fs from "fs";
 import path, { dirname } from "path";
-import type { Page } from "playwright";
+import type { Logger } from "winston";
+import type { Page } from "../browser/types";
+import type { ViewportInfo } from "./history_tree_processor/view";
 import { DOMBaseNode, DOMElementNode, DOMState, DOMTextNode } from "./views";
 import type { SelectorMap } from "./views";
 
 import { fileURLToPath } from "url";
 import bnLogger from "../logging_config";
-import { timeExecution } from "../utils";
-import type { ViewportInfo } from "./history_tree_processor/view";
+import { timeExecution } from "../utils_old";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const logger = bnLogger.child({
-	module: "browser_node/dom/service",
+	module: "browsernode/dom/service",
 });
 
 export class DomService {
 	private page: Page;
 	private xpathCache: Record<string, any> = {};
 	private jsCode: string;
+	private logger: Logger;
 
-	constructor(page: Page) {
+	constructor(page: Page, logger?: Logger) {
 		this.page = page;
 		this.xpathCache = {};
+		this.logger =
+			logger || bnLogger.child({ module: "browsernode/dom/service" });
 
 		this.jsCode = fs.readFileSync(
-			path.join(__dirname, "..", "dom", "buildDomTree.js"),
+			path.join(__dirname, "dom_tree", "index.js"),
 			"utf-8",
 		);
 	}
@@ -49,20 +53,82 @@ export class DomService {
 		};
 	}
 
+	@timeExecution("--getCrossOriginIframes(domService)")
+	async getCrossOriginIframes(): Promise<string[]> {
+		// invisible cross-origin iframes are used for ads and tracking, dont open those
+		const hiddenFrameUrls = (await this.page
+			.locator("iframe")
+			.filter({ visible: false })
+			.evaluateAll((elements) => elements.map((e) => e.src))) as string[];
+
+		const isAdUrl = (url: string): boolean => {
+			try {
+				const hostname = new URL(url).hostname;
+				return ["doubleclick.net", "adroll.com", "googletagmanager.com"].some(
+					(domain) => hostname.includes(domain),
+				);
+			} catch {
+				return false;
+			}
+		};
+
+		const currentHostname = new URL(this.page.url()).hostname;
+
+		return this.page
+			.frames()
+			.map((frame) => frame.url())
+			.filter((url) => {
+				try {
+					const parsedUrl = new URL(url);
+					return (
+						parsedUrl.hostname && // exclude data:urls and about:blank
+						parsedUrl.hostname !== currentHostname && // exclude same-origin iframes
+						!hiddenFrameUrls.includes(url) && // exclude hidden frames
+						!isAdUrl(url)
+					); // exclude most common ad network tracker frame URLs
+				} catch {
+					return false;
+				}
+			});
+	}
+
 	@timeExecution("--buildDomTree(domService)")
 	private async buildDomTree(
 		highlightElements: boolean,
 		focusElement: number,
 		viewportExpansion: number,
 	): Promise<[DOMElementNode, SelectorMap]> {
-		if ((await this.page.evaluate("1+1")) !== 2) {
+		if ((await (this.page as any).evaluate("1+1")) !== 2) {
 			throw new Error("The page cannot evaluate javascript code properly");
+		}
+
+		if (this.page.url() === "about:blank") {
+			// short-circuit if the page is a new empty tab for speed, no need to inject buildDomTree.js
+			return [
+				new DOMElementNode(
+					false, // isVisible
+					null, // parent
+					"body", // tagName
+					"", // xpath
+					{}, // attributes
+					[], // children
+					false, // isInteractive
+					false, // isTopElement
+					false, // isInViewport
+					false, // shadowRoot
+					undefined, // highlightIndex
+					undefined, // viewportCoordinates
+					undefined, // pageCoordinates
+					undefined, // viewportInfo
+				),
+				{},
+			];
 		}
 
 		// NOTE: We execute JS code in the browser to extract important DOM information.
 		//       The returned hash map contains information about the DOM tree and the
 		//       relationship between the DOM elements.
-		const debugMode = logger.level === "debug";
+		const debugMode = this.logger.level === "debug";
 		const args = {
 			doHighlightElements: highlightElements,
 			focusHighlightIndex: focusElement,
@@ -71,34 +137,66 @@ export class DomService {
 		};
 
 		try {
-			const evalPage = (await this.page.evaluate(
-				`(function() {
-					try {
-						console.log('Starting evaluation in browser...');
-						const fn = ${this.jsCode};
-						console.log('Function defined, now executing...');
-						const result = fn();
-						console.log('Function executed, result:', result);
-						return result;
-					} catch (error) {
-						console.error('Browser error:', error);
-						return { error: error.toString() };
-					}
-				})()`,
+			// const evalPage = (await this.page.evaluate(
+			//   `(function() {
+			//     try {
+			//       console.log('Starting evaluation in browser...');
+			//       const fn = ${this.jsCode};
+			//       console.log('Function defined, now executing...');
+			//       const result = fn();
+			//       console.log('Function executed, result:', result);
+			//       return result;
+			//     } catch (error) {
+			//       console.error('Browser error:', error);
+			//       return { error: error.toString() };
+			//     }
+			//   })()`,
+			//   args,
+			// )) as any;
+			const evalPage = (await (this.page as any).evaluate(
+				this.jsCode,
 				args,
 			)) as any;
 
+			// NOTE: We execute JS code in the browser to extract important DOM information.
+			//       The returned hash map contains information about the DOM tree and the
+			//       relationship between the DOM elements.
 			// Only log performance metrics in debug mode
 			if (debugMode && "perfMetrics" in evalPage) {
-				logger.debug(
-					`DOM Tree Building Performance Metrics:\n${JSON.stringify(evalPage.perfMetrics, null, 2)}`,
+				const perf = evalPage.perfMetrics;
+
+				// Get key metrics for summary
+				const totalNodes = perf?.nodeMetrics?.totalNodes || 0;
+
+				// Count interactive elements from the DOM map
+				let interactiveCount = 0;
+				if ("map" in evalPage) {
+					for (const nodeData of Object.values(evalPage.map)) {
+						if (
+							typeof nodeData === "object" &&
+							nodeData &&
+							"isInteractive" in nodeData &&
+							nodeData.isInteractive
+						) {
+							interactiveCount++;
+						}
+					}
+				}
+
+				// Create concise summary
+				const urlShort =
+					this.page.url().length > 50
+						? this.page.url().substring(0, 50) + "..."
+						: this.page.url();
+				this.logger.debug(
+					`🔎 Ran buildDOMTree.js interactive element detection on: ${urlShort} interactive=${interactiveCount}/${totalNodes}`, // processed_nodes,
 				);
 			}
 
 			return await this.constructDomTree(evalPage);
 		} catch (e: any) {
-			logger.error(`Error evaluating JavaScript: ${e}`);
-			logger.error(`Error stack: ${e.stack}`);
+			this.logger.error(`Error evaluating JavaScript: ${e}`);
+			this.logger.error(`Error stack: ${e.stack}`);
 			throw e;
 		}
 	}
@@ -108,7 +206,6 @@ export class DomService {
 		evalPage: any,
 	): Promise<[DOMElementNode, SelectorMap]> {
 		const jsNodeMap = evalPage.map;
-
 		const jsRootId = evalPage["rootId"];
 
 		const selectorMap: SelectorMap = {};
@@ -118,7 +215,7 @@ export class DomService {
 			try {
 				const result = this.parseNode(nodeData as any);
 				if (!Array.isArray(result) || result.length !== 2) {
-					logger.warn(
+					this.logger.warn(
 						`Invalid result from parseNode for node ${id}: ${result}`,
 					);
 					continue;
@@ -155,13 +252,19 @@ export class DomService {
 					}
 				}
 			} catch (e: any) {
-				logger.error(`Error processing node ${id}: ${e}`);
-				logger.error(`Error stack while processing node ${id}: ${e.stack}`);
+				this.logger.error(`Error processing node ${id}: ${e}`);
+				this.logger.error(
+					`Error stack while processing node ${id}: ${e.stack}`,
+				);
 				continue;
 			}
 		}
 
 		const htmlToDict = nodeMap[jsRootId.toString()];
+
+		// Clean up references
+		delete (evalPage as any).map;
+		delete (evalPage as any).rootId;
 
 		if (!htmlToDict || !(htmlToDict instanceof DOMElementNode)) {
 			throw new Error("Failed to parse HTML to dictionary");
@@ -180,6 +283,7 @@ export class DomService {
 			const textNode = new DOMTextNode(nodeData.isVisible, null, nodeData.text);
 			return [textNode, []];
 		}
+
 		try {
 			// Process coordinates if they exist for element nodes
 			let viewportInfo: ViewportInfo | undefined = undefined;
@@ -220,18 +324,19 @@ export class DomService {
 				pageCoordinates,
 				viewportInfo,
 			);
+
 			if (!(elementNode instanceof DOMBaseNode)) {
-				logger.warn(
+				this.logger.warn(
 					`Invalid node created for data: ${JSON.stringify(nodeData)}`,
 				);
 				return [null, []];
 			}
-			const childrenIds = nodeData.children || [];
 
+			const childrenIds = nodeData.children || [];
 			return [elementNode, childrenIds];
 		} catch (e: any) {
-			logger.error(`Error parsing node: ${e}`);
-			logger.error(`Error parsing node stack: ${e.stack}`);
+			this.logger.error(`Error parsing node: ${e}`);
+			this.logger.error(`Error parsing node stack: ${e.stack}`);
 			return [null, []];
 		}
 	}

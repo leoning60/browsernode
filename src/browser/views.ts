@@ -1,4 +1,5 @@
 import { Logger } from "winston";
+import { modelDump } from "../bn_utils";
 import type { DOMHistoryElement } from "../dom/history_tree_processor/view";
 import type {
 	DOMElementNode,
@@ -9,27 +10,28 @@ import type {
 import bnLogger from "../logging_config";
 
 const logger: Logger = bnLogger.child({
-	module: "browser_node/browser/views",
+	module: "browsernode/browser/views",
 });
 
+/**
+ * Represents information about a browser tab
+ */
 export class TabInfo {
-	// Represents information about a browser tab
 	constructor(
 		public pageId: number,
 		public url: string,
 		public title: string,
+		public parentPageId: number | null, // parent page that contains this popup or cross-origin iframe
 	) {}
-
-	toDict(): Record<string, any> {
-		return {
-			pageId: this.pageId,
-			url: this.url,
-			title: this.title,
-		};
-	}
 }
 
-export class BrowserState implements DOMState {
+/**
+ * The summary of the browser's current state designed for an LLM to process
+ */
+export class BrowserStateSummary implements DOMState {
+	// provided by DOMState:
+	// elementTree: DOMElementNode
+	// selectorMap: SelectorMap
 	constructor(
 		public elementTree: DOMElementNode,
 		public selectorMap: SelectorMap,
@@ -43,6 +45,9 @@ export class BrowserState implements DOMState {
 	) {}
 }
 
+/**
+ * The summary of the browser's state at a past point in time to usse in LLM message history
+ */
 export class BrowserStateHistory {
 	constructor(
 		public url: string,
@@ -54,7 +59,7 @@ export class BrowserStateHistory {
 
 	toDict(): Record<string, any> {
 		const data: Record<string, any> = {};
-		data["tabs"] = this.tabs.map((tab) => tab.toDict());
+		data["tabs"] = this.tabs.map((tab) => modelDump(tab));
 		data["screenshot"] = this.screenshot;
 		data["interactedElement"] = this.interactedElement.map((el) =>
 			el ? el.toDict() : null,
@@ -65,15 +70,19 @@ export class BrowserStateHistory {
 	}
 }
 
+/**
+ * Base class for all browser errors
+ */
 export class BrowserError extends Error {
-	// Base class for all browser errors
 	constructor(message: string) {
 		super(message);
 	}
 }
 
+/**
+ * Error raised when a URL is not allowed
+ */
 export class URLNotAllowedError extends BrowserError {
-	// Error raised when a URL is not allowed
 	constructor(message: string) {
 		super(message);
 	}

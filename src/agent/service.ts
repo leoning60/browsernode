@@ -1,130 +1,220 @@
 import { exec } from "child_process";
-import { existsSync, readFileSync } from "fs";
+import { appendFileSync, existsSync, readFileSync } from "fs";
+import os from "os";
 import path, { resolve } from "path";
 import { inspect, promisify } from "util";
 import { config } from "dotenv";
+import { v4 as uuidv4 } from "uuid";
 import { zodToJsonSchema } from "zod-to-json-schema";
-
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import {
-	AIMessage,
-	BaseMessage,
-	HumanMessage,
-	SystemMessage,
-} from "@langchain/core/messages";
-
+import { EventBus } from "./eventbus_utli";
+// Load environment variables
+config();
 import {
 	ActionResult,
 	AgentError,
 	AgentHistory,
 	AgentHistoryList,
 	AgentOutput,
+	AgentSettings,
+	AgentState,
 	AgentStepInfo,
+	type AgentStructuredOutput,
 	StepMetadata,
 } from "./views";
-import type { ToolCallingMethod } from "./views";
-import { AgentSettings, AgentState } from "./views";
 
-import { Browser } from "../browser/browser";
-import { BrowserContext } from "../browser/context";
-import { BrowserState, BrowserStateHistory } from "../browser/views";
+import type { BaseChatModel } from "../llm/base";
+import type { BaseMessage, UserMessage } from "../llm/messages";
+import { TokenCost } from "../tokens/service";
+import {
+	CreateAgentOutputFileEvent,
+	CreateAgentSessionEvent,
+	CreateAgentStepEvent,
+	CreateAgentTaskEvent,
+	UpdateAgentTaskEvent,
+} from "./cloud_events";
+
+import type { ToolCallingMethod } from "./views";
+
+import { BrowserProfile, BrowserSession } from "../browser";
+import type { Browser, BrowserContext, Page } from "../browser/types";
+import { BrowserStateHistory, BrowserStateSummary } from "../browser/views";
 import { ActionModel } from "../controller/registry/views";
 import { Controller } from "../controller/service";
 import { HistoryTreeProcessor } from "../dom/history_tree_processor/service";
 import { DOMHistoryElement } from "../dom/history_tree_processor/view";
-import { createHistoryGif } from "./gif";
-import {
-	MessageManager,
-	MessageManagerSettings,
-} from "./message_manager/service";
-import {
-	convertInputMessages,
-	extractJsonFromModelOutput,
-	saveConversation,
-} from "./message_manager/utils";
-import { AgentMessagePrompt, PlannerPrompt, SystemPrompt } from "./prompt";
+import { MessageManager } from "./message_manager/service";
+import { saveConversation } from "./message_manager/utils";
+import { AgentMessagePrompt, PlannerPrompt, SystemPrompt } from "./prompts";
 
+import { fileURLToPath } from "url";
+import { modelDump } from "../bn_utils";
+import { CONFIG } from "../config";
+import { DEFAULT_INCLUDE_ATTRIBUTES } from "../dom/views";
+import { LLMException } from "../exceptions";
+import { FileSystem } from "../filesystem/file_system";
 import bnLogger from "../logging_config";
-import { timeExecution } from "../utils";
+import { CloudSync } from "../sync";
+import { ProductTelemetry } from "../telemetry/service";
+import type { AgentTelemetryEvent } from "../telemetry/views";
+import { SignalHandler, getBrowserNodeVersion, logPrettyPath } from "../utils";
+import { timeExecution } from "../utils_old";
+import { createHistoryGif } from "./gif";
 
-// Load environment variables
-config();
 const logger = bnLogger.child({
-	label: "browser_node/agent/service",
+	label: "browsernode/agent/service",
 });
 
-function logResponse(response: AgentOutput): void {
-	/**
-	 * log model response
-	 */
-	let emoji: string;
-	if (response.currentState.evaluationPreviousGoal.includes("Success")) {
-		emoji = "👍";
-	} else if (response.currentState.evaluationPreviousGoal.includes("Failed")) {
-		emoji = "⚠";
-	} else {
-		emoji = "🤷";
+// Type aliases for better readability
+type AgentHookFunc<Context> = (agent: Agent<Context>) => Promise<void>;
+
+/**
+ * Utility function to log the model's response.
+ */
+function logResponse(
+	response: AgentOutput,
+	registry?: any,
+	logger?: any,
+): void {
+	// Use module logger if no logger provided
+	if (!logger) {
+		logger = bnLogger.child({ label: "browsernode/agent/service" });
 	}
 
-	// 记录状态信息
+	// Add null checks for response and currentState
+	if (
+		!response ||
+		!response.currentState ||
+		!response.currentState.evaluationPreviousGoal
+	) {
+		logger.warn("---->⚠️ Malformed response object, skipping response logging");
+		return;
+	}
+
+	let emoji: string;
+	if (
+		response.currentState.evaluationPreviousGoal
+			.toLowerCase()
+			.includes("success")
+	) {
+		emoji = "👍";
+	} else if (
+		response.currentState.evaluationPreviousGoal
+			.toLowerCase()
+			.includes("failure")
+	) {
+		emoji = "⚠️";
+	} else {
+		emoji = "❔";
+	}
+
+	// Only log thinking if it's present
+	if (response.currentState.thinking) {
+		logger.info(`💡 Thinking:\n${response.currentState.thinking}`);
+	}
 	logger.info(`${emoji} Eval: ${response.currentState.evaluationPreviousGoal}`);
 	logger.info(`🧠 Memory: ${response.currentState.memory}`);
-	logger.info(`🎯 Next goal: ${response.currentState.nextGoal}`);
-
-	for (let i = 0; i < response.action.length; i++) {
-		logger.info(
-			`🛠️ Action ${i + 1}/${response.action.length}: ${JSON.stringify(response.action[i], null, 2)}`,
-		);
-	}
+	logger.info(`🎯 Next goal: ${response.currentState.nextGoal}\n`);
 }
 
-const execAsync = promisify(exec);
-
-type Context = any;
-
-export class Agent<T = Context> {
-	controller: Controller<T>;
-	sensitiveData?: Record<string, string>;
+/**
+ * Agent class for executing browser automation tasks
+ */
+export class Agent<
+	Context = any,
+	TAgentStructuredOutput extends AgentStructuredOutput = AgentStructuredOutput,
+> {
+	// Core properties
+	id: string;
+	taskId: string;
+	sessionId: string;
+	task: string;
+	llm: BaseChatModel;
+	controller: Controller<Context>;
+	outputModelSchema?: new (
+		...args: any[]
+	) => TAgentStructuredOutput;
+	sensitiveData?: Record<string, string | Record<string, string>>;
 	settings: AgentSettings;
 	state: AgentState;
+	tokenCostService: TokenCost;
+	fileSystem?: FileSystem;
+	fileSystemPath?: string;
+
+	// Action models
 	ActionModel: any;
 	AgentOutput: any;
 	DoneActionModel: any;
 	DoneAgentOutput: any;
-	availableActions: string;
-	toolCallingMethod?: ToolCallingMethod;
+	unfilteredActions: string;
+
+	// Browser session
+	browserSession: BrowserSession | null = null;
+
+	// Message manager
 	private _messageManager: MessageManager;
-	injectedBrowser: boolean;
-	injectedBrowserContext: boolean;
-	browser: Browser;
-	browserContext: BrowserContext;
+
+	// Callbacks
 	registerNewStepCallback?: (
-		state: BrowserState,
+		state: BrowserStateSummary,
 		output: AgentOutput,
 		step: number,
 	) => void | Promise<void>;
 	registerDoneCallback?: (history: AgentHistoryList) => void | Promise<void>;
 	registerExternalAgentStatusRaiseErrorCallback?: () => Promise<boolean>;
-	context?: T;
-	telemetry: any; // Replace with actual telemetry type
-	initialActions?: any[];
-	version?: string;
-	source?: "git" | "pip" | "unknown";
-	chatModelLibrary?: string;
-	modelName?: string;
-	plannerModelName?: string;
 
+	// Context and telemetry
+	context: Context | null;
+	telemetry: ProductTelemetry;
+
+	// Initial actions
+	initialActions?: ActionModel[];
+
+	// Version and source info
+	version: string = "";
+	source: string = "";
+
+	forceExitTelemetryLogged: boolean = false;
+
+	// Session and task timing
+	private _sessionStartTime?: number;
+	private _taskStartTime?: number;
+
+	// Download tracking
+	hasDownloadsPath: boolean = false;
+	private _lastKnownDownloads: string[] = [];
+
+	// External pause event
+	private _externalPauseEvent: any; // Will be set to an event-like object
+
+	// Other properties
+	enableCloudSync: boolean;
+	cloudSync?: CloudSync;
+	eventbus?: EventBus; // EventBus type when available
+
+	// cli
+	running: boolean = false;
+	lastResponseTime: number = 0;
+
+	// Constructor with timeExecution decorator equivalent
 	constructor(
-		public task: string,
-		public llm: BaseChatModel,
+		task: string,
+		llm: BaseChatModel,
 		options: {
-			browser?: Browser;
+			// Browser options
+			page?: Page;
+			browser?: Browser | BrowserSession;
 			browserContext?: BrowserContext;
-			controller?: Controller<T>;
-			sensitiveData?: Record<string, string>;
-			initialActions?: any[];
+			browserProfile?: BrowserProfile;
+			browserSession?: BrowserSession;
+			controller?: Controller<Context>;
+
+			// Initial agent run parameters
+			sensitiveData?: Record<string, string | Record<string, string>>;
+			initialActions?: Array<Record<string, Record<string, any>>>;
+
+			// Cloud callbacks
 			registerNewStepCallback?: (
-				state: BrowserState,
+				state: BrowserStateSummary,
 				output: AgentOutput,
 				step: number,
 			) => void | Promise<void>;
@@ -132,6 +222,11 @@ export class Agent<T = Context> {
 				history: AgentHistoryList,
 			) => void | Promise<void>;
 			registerExternalAgentStatusRaiseErrorCallback?: () => Promise<boolean>;
+
+			// Agent settings
+			outputModelSchema?: new (
+				...args: any[]
+			) => TAgentStructuredOutput;
 			useVision?: boolean;
 			useVisionForPlanner?: boolean;
 			saveConversationPath?: string;
@@ -140,388 +235,559 @@ export class Agent<T = Context> {
 			retryDelay?: number;
 			overrideSystemMessage?: string;
 			extendSystemMessage?: string;
-			maxInputTokens?: number;
 			validateOutput?: boolean;
 			messageContext?: string;
 			generateGif?: boolean | string;
 			availableFilePaths?: string[];
 			includeAttributes?: string[];
 			maxActionsPerStep?: number;
-			toolCallingMethod?: ToolCallingMethod;
+			useThinking?: boolean;
+			maxHistoryItems?: number;
 			pageExtractionLLM?: BaseChatModel;
 			plannerLLM?: BaseChatModel;
 			plannerInterval?: number;
+			isPlannerReasoning?: boolean;
+			extendPlannerSystemMessage?: string;
 			injectedAgentState?: AgentState;
-			context?: T;
-			//
-			chatModelLibrary?: string;
-			modelName?: string;
-			plannerModelName?: string;
-			version?: string;
-			source?: "git" | "pip" | "unknown";
+			context?: Context;
+			source?: string;
+			fileSystemPath?: string;
+			taskId?: string;
+			cloudSync?: CloudSync;
+			calculateCost?: boolean;
+			displayFilesInDoneText?: boolean;
 		} = {},
 	) {
-		const startTime = Date.now(); // Measure constructor execution time
-
-		const {
-			browser,
-			browserContext,
-			controller = new Controller(),
-			sensitiveData,
-			initialActions,
-			registerNewStepCallback,
-			registerDoneCallback,
-			registerExternalAgentStatusRaiseErrorCallback,
-			useVision = true,
-			useVisionForPlanner = false,
-			saveConversationPath,
-			saveConversationPathEncoding = "utf-8",
-			maxFailures = 1,
-			retryDelay = 10,
-			overrideSystemMessage,
-			extendSystemMessage,
-			maxInputTokens = 128000,
-			validateOutput = false,
-			messageContext,
-			generateGif = false,
-			availableFilePaths,
-			includeAttributes = [
-				"title",
-				"type",
-				"name",
-				"role",
-				"aria-label",
-				"placeholder",
-				"value",
-				"alt",
-				"aria-expanded",
-				"data-date-format",
-			],
-			maxActionsPerStep = 10,
-			toolCallingMethod = "auto" as ToolCallingMethod,
-			pageExtractionLLM,
-			plannerLLM,
-			plannerInterval = 1,
-			injectedAgentState,
-			context,
-		} = options;
-
-		const pageExtractionLLMFinal = pageExtractionLLM || llm;
+		// Initialize IDs
+		this.id = options.taskId || uuidv4();
+		this.taskId = this.id;
+		this.sessionId = uuidv4();
 
 		// Core components
 		this.task = task;
 		this.llm = llm;
-		this.controller = controller;
-		this.sensitiveData = sensitiveData;
+		this.controller =
+			options.controller ||
+			new Controller<Context>(
+				undefined,
+				undefined,
+				options.displayFilesInDoneText,
+			);
 
+		// Structured output
+		this.outputModelSchema = options.outputModelSchema;
+		if (this.outputModelSchema) {
+			this.controller.useStructuredOutputAction(this.outputModelSchema);
+		}
+
+		this.sensitiveData = options.sensitiveData;
+
+		// Initialize settings
 		this.settings = new AgentSettings({
-			useVision,
-			useVisionForPlanner,
-			saveConversationPath,
-			saveConversationPathEncoding,
-			maxFailures,
-			retryDelay,
-			overrideSystemMessage,
-			extendSystemMessage,
-			maxInputTokens,
-			validateOutput,
-			messageContext,
-			generateGif,
-			availableFilePaths,
-			includeAttributes,
-			maxActionsPerStep,
-			toolCallingMethod,
-			pageExtractionLLM: pageExtractionLLMFinal,
-			plannerLLM,
-			plannerInterval,
+			useVision: options.useVision ?? true,
+			useVisionForPlanner: options.useVisionForPlanner ?? false,
+			saveConversationPath: options.saveConversationPath,
+			saveConversationPathEncoding:
+				options.saveConversationPathEncoding ?? "utf-8",
+			maxFailures: options.maxFailures ?? 1,
+			retryDelay: options.retryDelay ?? 10,
+			overrideSystemMessage: options.overrideSystemMessage,
+			extendSystemMessage: options.extendSystemMessage,
+			validateOutput: options.validateOutput ?? false,
+			messageContext: options.messageContext,
+			generateGif: options.generateGif ?? false,
+			availableFilePaths: options.availableFilePaths || [],
+			includeAttributes:
+				options.includeAttributes || DEFAULT_INCLUDE_ATTRIBUTES,
+			maxActionsPerStep: options.maxActionsPerStep ?? 10,
+			useThinking: options.useThinking ?? true,
+			maxHistoryItems: options.maxHistoryItems ?? 40,
+			pageExtractionLLM: options.pageExtractionLLM || llm,
+			plannerLLM: options.plannerLLM,
+			plannerInterval: options.plannerInterval ?? 1,
+			isPlannerReasoning: options.isPlannerReasoning ?? false,
+			extendPlannerSystemMessage: options.extendPlannerSystemMessage,
+			calculateCost: options.calculateCost ?? false,
 		});
 
+		// Token cost service
+		this.tokenCostService = new TokenCost(this.settings.calculateCost);
+		this.tokenCostService.registerLLM(llm);
+		if (this.settings.pageExtractionLLM) {
+			this.tokenCostService.registerLLM(this.settings.pageExtractionLLM);
+		}
+		if (this.settings.plannerLLM) {
+			this.tokenCostService.registerLLM(this.settings.plannerLLM);
+		}
+
 		// Initialize state
-		this.state = injectedAgentState || new AgentState();
+		this.state = options.injectedAgentState || new AgentState();
+
+		// Initialize file system
+		this._setFileSystem(options.fileSystemPath);
 
 		// Action setup
-		this.setupActionModels();
-		this.setBrowserUseVersionAndSource();
-		this.initialActions = initialActions
-			? this.convertInitialActions(initialActions)
+		this._setupActionModels();
+		this._setBrowserNodeVersionAndSource(options.source);
+		this.initialActions = options.initialActions
+			? this._convertInitialActions(options.initialActions)
 			: undefined;
 
-		// Model setup
-		this.setModelNames();
+		// Verify LLM setup
+		this._verifyAndSetupLLM();
 
-		// For models without tool calling, add available actions to context
-		this.availableActions = this.controller.registry.getPromptDescription();
+		// TODO: move this logic to the LLMs
+		// Handle model-specific vision settings
+		this._handleModelSpecificSettings();
 
-		this.toolCallingMethod = this.setToolCallingMethod();
-		this.settings.messageContext = this.setMessageContext();
+		// Log agent initialization
+		this._logAgentInitialization();
+
+		// Initialize available actions for system prompt (only non-filtered actions)
+		// These will be used for the system prompt to maintain caching
+		this.unfilteredActions = this.controller.registry.getPromptDescription();
 
 		// Initialize message manager with state
+		// Initial system prompt with all actions - will be updated during each step
 		this._messageManager = new MessageManager({
 			task,
 			systemMessage: new SystemPrompt({
-				actionDescription: this.availableActions,
+				actionDescription: this.unfilteredActions,
 				maxActionsPerStep: this.settings.maxActionsPerStep,
-				overrideSystemMessage: this.settings.overrideSystemMessage ?? undefined,
-				extendSystemMessage: this.settings.extendSystemMessage ?? undefined,
+				overrideSystemMessage: this.settings.overrideSystemMessage,
+				extendSystemMessage: this.settings.extendSystemMessage,
+				useThinking: this.settings.useThinking,
 			}).getSystemMessage(),
-			settings: {
-				maxInputTokens: this.settings.maxInputTokens,
-				includeAttributes: this.settings.includeAttributes,
-				messageContext: this.settings.messageContext,
-				sensitiveData,
-				availableFilePaths: this.settings.availableFilePaths,
-				modelName: this.modelName,
-			} as MessageManagerSettings,
+			fileSystem: this.fileSystem!,
+			availableFilePaths: this.settings.availableFilePaths,
 			state: this.state.messageManagerState,
+			useThinking: this.settings.useThinking,
+			includeAttributes: this.settings.includeAttributes,
+			messageContext: this.settings.messageContext,
+			sensitiveData: this.sensitiveData,
+			maxHistoryItems: this.settings.maxHistoryItems,
 		});
 
-		// Browser setup
-		this.injectedBrowser = browser !== undefined;
-		this.injectedBrowserContext = browserContext !== undefined;
-		if (browserContext) {
-			this.browser = browser!;
-			this.browserContext = browserContext;
-		} else {
-			this.browser = browser || new Browser();
-			this.browserContext = new BrowserContext(
-				this.browser,
-				this.browser.config.newContextConfig,
-			);
-		}
+		// Initialize browser session
+		this._initializeBrowserSession(options);
 
-		// Callbacks
-		this.registerNewStepCallback = registerNewStepCallback;
-		this.registerDoneCallback = registerDoneCallback;
+		// Validate sensitive data security
+		this._validateSensitiveDataSecurity();
+
+		// Set callbacks
+		this.registerNewStepCallback = options.registerNewStepCallback;
+		this.registerDoneCallback = options.registerDoneCallback;
 		this.registerExternalAgentStatusRaiseErrorCallback =
-			registerExternalAgentStatusRaiseErrorCallback;
+			options.registerExternalAgentStatusRaiseErrorCallback;
 
 		// Context
-		this.context = context;
+		this.context = options.context || null;
 
 		// Telemetry
-		this.telemetry = { capture: (event: any) => {} }; // Replace with actual implementation
+		this.telemetry = new ProductTelemetry();
 
+		// Event bus with WAL persistence
+		// Default to ~/.config/browsernode/events/{agent_session_id}.jsonl
+		const walPath = path.join(
+			CONFIG.browsernodeConfigDir,
+			"events",
+			`${this.sessionId}.jsonl`,
+		);
+		this.eventbus = new EventBus({
+			name: this.sessionId,
+			walPath: walPath,
+		});
+
+		// Cloud sync service
+		this.enableCloudSync = CONFIG.browsernodeCloudSync;
+		if (this.enableCloudSync || options.cloudSync) {
+			this.cloudSync = options.cloudSync || new CloudSync();
+			// Register cloud sync handler
+			this.eventbus?.on("*", this.cloudSync.handleEvent);
+		}
+
+		// Resolve and expand save conversation path
 		if (this.settings.saveConversationPath) {
+			const savePathStr = this.settings.saveConversationPath.toString();
+			// Expand user home directory (~) and resolve to absolute path
+			const expandedPath = savePathStr.startsWith("~")
+				? savePathStr.replace("~", os.homedir())
+				: savePathStr;
+			this.settings.saveConversationPath = path.resolve(expandedPath);
 			logger.info(
-				`Saving conversation to ${this.settings.saveConversationPath}`,
+				`💬 Saving conversation to ${logPrettyPath(this.settings.saveConversationPath)}`,
 			);
 		}
 
-		// At the end of the constructor
-		const executionTime = (Date.now() - startTime) / 1000;
-		logger.debug(
-			`--constructor (agent) Execution time: ${executionTime.toFixed(2)} seconds`,
-		);
+		// Initialize download tracking
+		if (!this.browserSession) {
+			throw new Error("BrowserSession is not set up");
+		}
+		this.hasDownloadsPath =
+			this.browserSession.browserProfile.downloadsPath !== null &&
+			this.browserSession.browserProfile.downloadsPath !== undefined;
+		if (this.hasDownloadsPath) {
+			this._lastKnownDownloads = [];
+			logger.info("📁 Initialized download tracking for agent");
+		}
+
+		// Initialize external pause event
+		this._externalPauseEvent = this._createAsyncEvent();
+		this._externalPauseEvent.set();
 	}
 
-	private setMessageContext(): string | undefined {
-		if (this.toolCallingMethod === "raw") {
-			if (this.settings.messageContext) {
-				return `${this.settings.messageContext}\n\nAvailable actions: ${this.availableActions}`;
-			} else {
-				return `Available actions: ${this.availableActions}`;
+	// Properties
+	// Get instance-specific logger with task ID in the name
+	get logger() {
+		const browserSessionId = this.browserSession?.id || this.id;
+		const currentPageId = this.browserSession?.agentCurrentPage
+			? String(this.browserSession.agentCurrentPage).slice(-2)
+			: "00";
+		return bnLogger.child({
+			label: `browsernode.Agent🅰 ${this.taskId.slice(-4)} on 🆂 ${browserSessionId.slice(-4)} 🅟 ${currentPageId}`,
+		});
+	}
+
+	get browser(): Browser {
+		if (!this.browserSession) {
+			throw new Error("BrowserSession is not set up");
+		}
+		if (!this.browserSession.browser) {
+			throw new Error("Browser is not set up");
+		}
+		return this.browserSession.browser;
+	}
+
+	get browserContext(): BrowserContext {
+		if (!this.browserSession) {
+			throw new Error("BrowserSession is not set up");
+		}
+		if (!this.browserSession.browserContext) {
+			throw new Error("BrowserContext is not set up");
+		}
+		return this.browserSession.browserContext;
+	}
+
+	get browserProfile(): BrowserProfile {
+		if (!this.browserSession) {
+			throw new Error("BrowserSession is not set up");
+		}
+		return this.browserSession.browserProfile;
+	}
+
+	// Update availableFilePaths with downloaded files.
+	private _updateAvailableFilePaths(downloads: string[]): void {
+		if (!this.hasDownloadsPath) {
+			return;
+		}
+
+		const currentFiles = new Set(this.settings.availableFilePaths || []);
+		const newFiles = new Set(
+			downloads.filter((file) => !currentFiles.has(file)),
+		);
+
+		if (newFiles.size > 0) {
+			this.settings.availableFilePaths = [...currentFiles, ...newFiles];
+			// Update message manager with new file paths
+			this._messageManager.availableFilePaths =
+				this.settings.availableFilePaths;
+
+			this.logger.info(
+				`📁 Added ${newFiles.size} downloaded files to available_file_paths (total: ${this.settings.availableFilePaths.length} files)`,
+			);
+			for (const filePath of newFiles) {
+				this.logger.info(`📄 New file available: ${filePath}`);
+			}
+		} else {
+			this.logger.info(
+				`📁 No new downloads detected (tracking ${currentFiles.size} files)`,
+			);
+		}
+	}
+
+	private _setFileSystem(fileSystemPath?: string): void {
+		// Check for conflicting parameters
+		if (this.state.fileSystemState && fileSystemPath) {
+			throw new Error(
+				"Cannot provide both fileSystemState (from agent state) and fileSystemPath. " +
+					"Either restore from existing state or create new file system at specified path, not both.",
+			);
+		}
+
+		// Check if we should restore from existing state first
+		if (this.state.fileSystemState) {
+			try {
+				// Restore file system from state at the exact same location
+				this.fileSystem = FileSystem.fromState(this.state.fileSystemState);
+				this.fileSystemPath = this.fileSystem.baseDir;
+				logger.info(
+					`💾 File system restored from state to: ${this.fileSystemPath}`,
+				);
+				return;
+			} catch (error) {
+				logger.error(`💾 Failed to restore file system from state: ${error}`);
+				throw error;
 			}
 		}
-		return this.settings.messageContext ?? undefined;
+
+		// Initialize new file system
+		try {
+			if (fileSystemPath) {
+				this.fileSystem = new FileSystem(fileSystemPath);
+				this.fileSystemPath = fileSystemPath;
+			} else {
+				// Create a temporary file system using agent ID
+				const baseTmp = os.tmpdir();
+				this.fileSystemPath = path.join(
+					baseTmp,
+					`browsernode_agent_${this.id}`,
+				);
+				this.fileSystem = new FileSystem(this.fileSystemPath);
+			}
+		} catch (error) {
+			logger.error(`💾 Failed to initialize file system: ${error}.`);
+			throw error;
+		}
+
+		// Save file system state to agent state
+		this.state.fileSystemState = this.fileSystem.getState();
+		logger.info(`💾 File system path: ${this.fileSystemPath}`);
+	}
+
+	private _setBrowserNodeVersionAndSource(sourceOverride?: string): void {
+		// Get the version from package.json
+		this.version = getBrowserNodeVersion();
+
+		const __filename = fileURLToPath(import.meta.url);
+		const __dirname = path.dirname(__filename);
+
+		// Determine source
+		try {
+			const packageRoot = path.join(__dirname, "..", "..", "..");
+			const repoFiles = [".git", "README.md", "docs", "examples"];
+			const hasRepoFiles = repoFiles.every((file) =>
+				existsSync(path.join(packageRoot, file)),
+			);
+			this.source = hasRepoFiles ? "git" : "npm";
+		} catch (error) {
+			this.logger.debug(`Error determining source: ${error}`);
+			this.source = "unknown";
+		}
+		// this.logger.debug('Version: {version}, Source: {source}')  // moved later to _logAgentRun so that people are more likely to include it in copy-pasted support ticket logs
+		if (sourceOverride) {
+			this.source = sourceOverride;
+		}
+	}
+	// Save current file system state to agent state
+	private _setupActionModels(): void {
+		// Initially only include actions with no filters
+		this.logger.info("---->_setupActionModels starting...");
+		this.ActionModel = this.controller.registry.createActionModel();
+		this.logger.info("---->_setupActionModels createActionModel completed");
+
+		// console.debug("---->_setupActionModels this.settings", this.settings);
+		// Create output model with the dynamic actions
+		if (this.settings.useThinking) {
+			this.logger.info(
+				`---->_setupActionModels useThinking==true this.ActionModel: ${JSON.stringify(this.ActionModel, null, 2)}`,
+			);
+			this.logger.info(
+				`---->_setupActionModels this.ActionModel keys: ${JSON.stringify(Object.keys(this.ActionModel))}`,
+			);
+			this.AgentOutput = AgentOutput.typeWithCustomActions(this.ActionModel);
+		} else {
+			this.AgentOutput = AgentOutput.typeWithCustomActionsNoThinking(
+				this.ActionModel,
+			);
+		}
+		this.logger.info(
+			`---->_setupActionModels this.AgentOutput: ${typeof this.AgentOutput}`,
+		);
+		this.logger.info(
+			`---->_setupActionModels this.AgentOutput: ${this.AgentOutput}`,
+		);
+
+		// Used to force the done action when max_steps is reached
+		this.DoneActionModel = this.controller.registry.createActionModel(["done"]);
+		if (this.settings.useThinking) {
+			this.DoneAgentOutput = AgentOutput.typeWithCustomActions(
+				this.DoneActionModel,
+			);
+		} else {
+			this.DoneAgentOutput = AgentOutput.typeWithCustomActionsNoThinking(
+				this.DoneActionModel,
+			);
+		}
+		this.logger.info(
+			`---->_setupActionModels this.DoneAgentOutput: ${this.DoneAgentOutput}`,
+		);
+		this.logger.info("---->_setupActionModels completed");
 	}
 
 	/**
-	 * Get the version and source of the browsernode package (git or pip in a nutshell)
+	 * Add a new task to the agent, keeping the same task_id as tasks are continuous
 	 */
-	private setBrowserUseVersionAndSource(): void {
-		try {
-			// First check for repository-specific files
-			const repo_files = [".git", "README.md", "docs", "examples"];
-			const packageRoot = resolve(__dirname, "..", "..");
-
-			// If all of these files/dirs exist, it's likely from git
-			if (repo_files.every((file) => existsSync(resolve(packageRoot, file)))) {
-				try {
-					execAsync("git describe --tags")
-						.then(({ stdout }) => {
-							this.version = stdout.trim();
-						})
-						.catch(() => {
-							this.version = "unknown";
-						});
-					this.source = "git";
-				} catch (error) {
-					this.version = "unknown";
-					this.source = "git";
-				}
-			} else {
-				// If no repo files found, try getting version from package.json
-				try {
-					const packageJson = JSON.parse(
-						readFileSync(resolve(packageRoot, "package.json"), "utf8"),
-					);
-					this.version = packageJson.version;
-					this.source = "pip";
-				} catch (error) {
-					this.version = "unknown";
-					this.source = "unknown";
-				}
-			}
-		} catch (error) {
-			this.version = "unknown";
-			this.source = "unknown";
-		}
+	addNewTask(newTask: string): void {
+		// Simply delegate to message manager - no need for new task_id or events
+		// The task continues with new instructions, it doesn't end and start a new one
+		this.task = newTask;
+		this._messageManager.addNewTask(newTask);
 	}
 
-	private setModelNames(): void {
-		this.chatModelLibrary = this.llm.constructor.name;
-		this.modelName = "Unknown";
-
-		if ("modelName" in this.llm && this.llm.modelName !== undefined) {
-			this.modelName = this.llm.modelName as string;
-		} else if ("model" in this.llm && this.llm.model !== undefined) {
-			this.modelName = this.llm.model as string;
-		}
-
-		if (this.settings.plannerLLM) {
-			if (
-				"modelName" in this.settings.plannerLLM &&
-				this.settings.plannerLLM.modelName !== undefined
-			) {
-				this.plannerModelName = this.settings.plannerLLM.modelName as string;
-			} else if (
-				"model" in this.settings.plannerLLM &&
-				this.settings.plannerLLM.model !== undefined
-			) {
-				this.plannerModelName = this.settings.plannerLLM.model as string;
-			} else {
-				this.plannerModelName = "Unknown";
-			}
-		} else {
-			this.plannerModelName = undefined;
-		}
-	}
-
-	private setupActionModels(): void {
-		this.ActionModel = this.controller.registry.createActionModel();
-		this.AgentOutput = AgentOutput.typeWithCustomActions(this.ActionModel);
-		// console.debug("this.AgentOutput::::", this.AgentOutput);
-		// Used to force the done action when max_steps is reached
-		this.DoneActionModel = this.controller.registry.createActionModel(["done"]);
-		this.DoneAgentOutput = AgentOutput.typeWithCustomActions(
-			this.DoneActionModel,
-		);
-	}
-
-	private setToolCallingMethod(): ToolCallingMethod | undefined {
-		const toolCallingMethod = this.settings.toolCallingMethod;
-		if (toolCallingMethod === "auto") {
-			if (
-				this.modelName &&
-				(this.modelName.includes("deepseek-reasoner") ||
-					this.modelName.includes("deepseek-r1") ||
-					this.modelName.includes("deepseek"))
-			) {
-				return "raw";
-			} else if (
-				this.chatModelLibrary === "ChatGoogleGenerativeAI" ||
-				this.isGeminiModel()
-			) {
-				// Use raw mode for Gemini to avoid structured output issues
-				return "raw";
-			} else if (this.chatModelLibrary === "ChatOllama") {
-				return "raw";
-			} else if (this.chatModelLibrary === "ChatOpenAI") {
-				return "functionCalling";
-			} else if (this.chatModelLibrary === "AzureChatOpenAI") {
-				return "functionCalling";
-			} else {
-				return undefined;
-			}
-		} else {
-			return toolCallingMethod ?? undefined;
-		}
-	}
-
-	public addNewTask(new_task: string): void {
-		this._messageManager.addNewTask(new_task);
-	}
-
-	private async raiseIfStoppedOrPaused(): Promise<void> {
-		if (this.registerExternalAgentStatusRaiseErrorCallback) {
-			if (await this.registerExternalAgentStatusRaiseErrorCallback()) {
-				throw new Error("Interrupted");
-			}
-		}
-
-		if (this.state.stopped || this.state.paused) {
-			logger.debug("Agent paused after getting state");
-			throw new Error("Interrupted");
-		}
-	}
-
-	@timeExecution("--step (agent)")
-	public async step(stepInfo?: AgentStepInfo): Promise<void> {
-		logger.info(`📍 Step ${this.state.nSteps}`);
-		let state: BrowserState | null = null; // clear state
-		let modelOutput: AgentOutput | null = null; // clear model output
-		let result: ActionResult[] = []; // clear result
-		const stepStartTime = Date.now(); // clear step start time
-		let tokens = 0; // clear tokens
+	/**
+	 * Execute one step of the task
+	 */
+	@timeExecution("--step")
+	async step(stepInfo?: AgentStepInfo): Promise<void> {
+		let browserStateSummary: BrowserStateSummary | null = null;
+		let modelOutput: AgentOutput | null = null;
+		let result: ActionResult[] = [];
+		const stepStartTime = Date.now();
 
 		try {
-			state = await this.browserContext.getState();
-			await this.raiseIfStoppedOrPaused();
+			if (!this.browserSession) {
+				throw new Error("BrowserSession is not set up");
+			}
+
+			browserStateSummary = await this.browserSession.getStateSummary(true);
+			const currentPage = await this.browserSession.getCurrentPage();
+
+			this._logStepContext(currentPage, browserStateSummary);
+
+			await this._raiseIfStoppedOrPaused();
+
+			// Update action models with page-specific actions
+			await this._updateActionModelsForPage(currentPage);
+
+			// Get page-specific filtered actions
+			const pageFilteredActions =
+				this.controller.registry.getPromptDescription(currentPage);
+
+			// If there are page-specific actions, add them as a special message
+			if (pageFilteredActions) {
+				const pageActionMessage = `For this page, these additional actions are available:\n${pageFilteredActions}`;
+				this._messageManager.addMessageWithType({
+					role: "user",
+					content: pageActionMessage,
+				});
+			}
+
 			this._messageManager.addStateMessage(
-				state,
-				this.state.lastResult ?? undefined,
+				browserStateSummary,
+				this.state.lastModelOutput,
+				this.state.lastResult,
 				stepInfo,
 				this.settings.useVision,
+				pageFilteredActions,
+				this.sensitiveData,
 			);
 
-			// Run planner at specified intervals if planner is configured
+			// Run planner at specified intervals if configured
 			if (
 				this.settings.plannerLLM &&
 				this.state.nSteps % this.settings.plannerInterval === 0
 			) {
-				const plan = await this.runPlanner();
-				if (plan) {
-					// Add plan before last state message
-					this._messageManager.addPlan(plan, -1);
-				}
+				// Add plan before last state message
+				const plan = await this._runPlanner();
+				this._messageManager.addPlan(plan, -1);
 			}
 
-			if (stepInfo && stepInfo.isLastStep()) {
+			// Handle last step
+			if (stepInfo?.isLastStep()) {
 				// Add last step warning if needed
-				let msg =
-					'Now comes your last step. Use only the "done" action now. No other actions - so here your action sequence must have length 1.';
-				msg +=
-					'\nIf the task is not yet fully finished as requested by the user, set success in "done" to false! E.g. if not all steps are fully completed.';
-				msg +=
-					'\nIf the task is fully finished, set success in "done" to true.';
-				msg +=
-					"\nInclude everything you found out for the ultimate task in the done text.";
-				logger.info("Last step finishing up");
-				this._messageManager.addMessageWithTokens(
-					new HumanMessage({ content: msg }),
-				);
+				const msg =
+					'Now comes your last step. Use only the "done" action now. No other actions - so here your action sequence must have length 1.\n' +
+					'If the task is not yet fully finished as requested by the user, set success in "done" to false! E.g. if not all steps are fully completed.\n' +
+					'If the task is fully finished, set success in "done" to true.\n' +
+					"Include everything you found out for the ultimate task in the done text.";
+				this.logger.info("Last step finishing up");
+				this._messageManager.addMessageWithType({ role: "user", content: msg });
+
+				// Defensive check: ensure DoneAgentOutput is defined before assignment
+				if (!this.DoneAgentOutput) {
+					this.logger.warn(
+						"---->⚠️ this.DoneAgentOutput is undefined, re-initializing action models",
+					);
+					this._setupActionModels();
+					if (!this.DoneAgentOutput) {
+						throw new Error(
+							"---->Failed to initialize DoneAgentOutput - this.DoneAgentOutput is still undefined after _setupActionModels()",
+						);
+					}
+				}
+
 				this.AgentOutput = this.DoneAgentOutput;
 			}
 
 			const inputMessages = this._messageManager.getMessages();
-			tokens = this._messageManager.state.history.currentTokens;
 
 			try {
 				modelOutput = await this.getNextAction(inputMessages);
-				this.state.nSteps += 1;
 
-				if (this.registerNewStepCallback) {
-					const callback = this.registerNewStepCallback;
-					if (callback.constructor.name === "AsyncFunction") {
-						await callback(state, modelOutput, this.state.nSteps);
-					} else {
-						callback(state, modelOutput, this.state.nSteps);
+				if (
+					!modelOutput.action ||
+					!Array.isArray(modelOutput.action) ||
+					modelOutput.action.every((action) => Object.keys(action).length === 0)
+				) {
+					this.logger.warn("Model returned empty action. Retrying...");
+
+					const clarificationMessage = {
+						role: "user" as const,
+						content:
+							"You forgot to return an action. Please respond only with a valid JSON action according to the expected format.",
+					};
+
+					const retryMessages = [...inputMessages, clarificationMessage];
+					modelOutput = await this.getNextAction(retryMessages);
+
+					if (
+						!modelOutput.action ||
+						modelOutput.action.every(
+							(action) => Object.keys(action).length === 0,
+						)
+					) {
+						this.logger.warn(
+							"Model still returned empty after retry. Inserting safe noop action.",
+						);
+						const actionInstance = new this.ActionModel();
+						actionInstance.done = {
+							success: false,
+							text: "No next action returned by LLM!",
+						};
+						modelOutput.action = [actionInstance];
 					}
 				}
 
+				// Check again for paused/stopped state
+				await this._raiseIfStoppedOrPaused();
+
+				this.state.nSteps += 1;
+
+				// Execute callbacks
+				if (this.registerNewStepCallback) {
+					if (this.isAsyncFunction(this.registerNewStepCallback)) {
+						await this.registerNewStepCallback(
+							browserStateSummary,
+							modelOutput,
+							this.state.nSteps,
+						);
+					} else {
+						this.registerNewStepCallback(
+							browserStateSummary,
+							modelOutput,
+							this.state.nSteps,
+						);
+					}
+				}
+
+				// Save conversation if needed
 				if (this.settings.saveConversationPath) {
-					const target = `${this.settings.saveConversationPath}_${this.state.nSteps}.txt`;
-					saveConversation(
+					const conversationDir = path.resolve(
+						this.settings.saveConversationPath.toString(),
+					);
+					const conversationFilename = `conversation_${this.id}_${this.state.nSteps}.txt`;
+					const target = path.join(conversationDir, conversationFilename);
+					await saveConversation(
 						inputMessages,
 						modelOutput,
 						target,
@@ -529,363 +795,470 @@ export class Agent<T = Context> {
 					);
 				}
 
-				this._messageManager.removeLastStateMessage(); // We don't want the whole state in the chat history
+				// Remove last state message from history
+				this._messageManager.removeLastStateMessage(); // we dont want the whole state in the chat history
 
-				await this.raiseIfStoppedOrPaused();
-
-				this._messageManager.addModelOutput(modelOutput);
-			} catch (e) {
-				// Model call failed, remove last state message from history
+				// Check again if paused before committing
+				// check again if Ctrl+C was pressed before we commit the output to history
+				await this._raiseIfStoppedOrPaused();
+			} catch (error) {
 				this._messageManager.removeLastStateMessage();
-				throw e;
+				if (error instanceof Error && error.message.includes("cancelled")) {
+					throw new Error("Model query cancelled by user");
+				}
+				throw error;
 			}
-			result = await this.multiAct(modelOutput.action);
-			this.state.lastResult = result;
 
-			if (result.length > 0 && result[result.length - 1]?.isDone) {
-				logger.info(
-					`📄 Result: ${result[result.length - 1]?.extractedContent}`,
-				);
+			// Execute actions
+			result = await this.multiAct(modelOutput.action);
+
+			this.state.lastResult = result;
+			this.state.lastModelOutput = modelOutput;
+
+			// Check for new downloads after executing actions
+			if (this.hasDownloadsPath && this.browserSession) {
+				try {
+					const currentDownloads = this.browserSession.downloadedFiles;
+					if (
+						JSON.stringify(currentDownloads) !==
+						JSON.stringify(this._lastKnownDownloads)
+					) {
+						this._updateAvailableFilePaths(currentDownloads);
+						this._lastKnownDownloads = currentDownloads;
+					}
+				} catch (error) {
+					this.logger.debug(`📁 Failed to check for new downloads: ${error}`);
+				}
+			}
+
+			// Log final result
+			if (result.length > 0) {
+				const lastResult = result[result.length - 1];
+				if (lastResult?.isDone) {
+					this.logger.info(`📄 Result: ${lastResult.extractedContent}`);
+					if (lastResult.attachments) {
+						this.logger.info("📎 Click links below to access the attachments:");
+						for (const filePath of lastResult.attachments || []) {
+							this.logger.info(`👉 ${filePath}`);
+						}
+					}
+				}
 			}
 
 			this.state.consecutiveFailures = 0;
-		} catch (e) {
-			if (e instanceof Error && e.message === "Interrupted") {
-				logger.debug("Agent paused");
+		} catch (error) {
+			if (error instanceof Error && error.message.includes("paused")) {
+				// this.logger.debug("Agent paused");
 				this.state.lastResult = [
 					{
 						error:
-							"The agent was paused - now continuing actions might need to be repeated",
+							"The agent was paused mid-step - the last action might need to be repeated",
 						includeInMemory: true,
-					} as ActionResult,
+					},
 				];
 				return;
+			} else if (
+				error instanceof Error &&
+				(error.name === "AbortError" || error.message.includes("cancelled"))
+			) {
+				// Directly handle the case where the step is cancelled at a higher level
+				// this.logger.debug("Task cancelled - agent was paused with Ctrl+C");
+				this.state.lastResult = [
+					{
+						error: "The agent was paused with Ctrl+C",
+						includeInMemory: true,
+					},
+				];
+				throw new Error("Step cancelled by user");
 			} else {
-				result = await this.handleStepError(e as Error);
+				result = await this._handleStepError(error as Error);
 				this.state.lastResult = result;
 			}
 		} finally {
 			const stepEndTime = Date.now();
-			const actions = modelOutput
-				? modelOutput.action.map((a) => {
-						// Simulating model_dump(exclude_unset=True) behavior
-						const cleanedAction: Record<string, any> = {};
-						for (const [key, value] of Object.entries(a)) {
-							if (value !== undefined) {
-								cleanedAction[key] = value;
-							}
-						}
-						return cleanedAction;
-					})
-				: [];
-
-			this.telemetry.capture({
-				type: "AgentStepTelemetryEvent",
-				agentId: this.state.agentId,
-				step: this.state.nSteps,
-				actions,
-				consecutiveFailures: this.state.consecutiveFailures,
-				stepError: result.length
-					? result.map((r) => r.error).filter(Boolean)
-					: ["No result"],
-			});
-
-			if (!result.length) {
-				return;
-			}
-
-			if (state) {
-				const metadata: StepMetadata = {
-					stepNumber: this.state.nSteps,
+			if (result.length > 0 && browserStateSummary) {
+				const metadata = new StepMetadata(
 					stepStartTime,
 					stepEndTime,
-					inputTokens: tokens,
-					durationSeconds: (stepEndTime - stepStartTime) / 1000,
-				};
-				this.makeHistoryItem(modelOutput, state, result, metadata);
+					this.state.nSteps,
+				);
+				this._makeHistoryItem(
+					modelOutput,
+					browserStateSummary,
+					result,
+					metadata,
+				);
+			}
+
+			// Log step completion summary
+			this._logStepCompletionSummary(stepStartTime, result);
+
+			// Save file system state after step completion
+			this.saveFileSystemState();
+
+			// Emit both step created and executed events
+			if (browserStateSummary && modelOutput) {
+				// Extract key step data for the event
+				const actionsData =
+					modelOutput.action?.map((action) =>
+						action.modelDump ? action.modelDump() : action,
+					) || [];
+
+				// Emit step event (placeholder - actual implementation depends on event system)
+				this.eventbus?.dispatch(
+					CreateAgentStepEvent.fromAgentStep(
+						this,
+						modelOutput,
+						result,
+						actionsData,
+						browserStateSummary,
+					),
+				);
 			}
 		}
 	}
 
-	@timeExecution("--handleStepError(agent)")
-	private async handleStepError(error: Error): Promise<ActionResult[]> {
-		const includeTrace = logger.level === "debug";
-		const errorMsg = AgentError.formatError(error, includeTrace);
-		const prefix = `❌ Result failed ${this.state.consecutiveFailures + 1}/${this.settings.maxFailures} times:`;
+	/**Handle step error*/
+	@timeExecution("--handle_step_error (agent)")
+	private async _handleStepError(error: Error): Promise<ActionResult[]> {
+		const includeTrace = this.logger.level === "debug";
+		let errorMsg = AgentError.formatError(error, includeTrace);
+		const prefix = `❌ Result failed ${this.state.consecutiveFailures + 1}/${this.settings.maxFailures} times:\n `;
+		this.state.consecutiveFailures += 1;
 
+		if (errorMsg.includes("Browser closed")) {
+			this.logger.error(
+				"❌ Browser is closed or disconnected, unable to proceed",
+			);
+			return [
+				{
+					error: "Browser closed or disconnected, unable to proceed",
+					includeInMemory: true,
+				},
+			];
+		}
+
+		// Check for validation errors and token limit issues
 		if (
-			error instanceof Error &&
-			(error.name === "ValidationError" ||
-				error.name === "ValueError" ||
-				error.message.includes("validation failed"))
+			error.name === "ValidationError" ||
+			error.name === "ValueError" ||
+			error instanceof TypeError
 		) {
-			logger.error(`${prefix}`, error);
+			this.logger.error(`${prefix}${errorMsg}`);
 			if (errorMsg.includes("Max token limit reached")) {
-				// Cut tokens from history
-				this._messageManager.settings.maxInputTokens =
-					this.settings.maxInputTokens - 500;
-				logger.info(
-					`Cutting tokens from history - new max input tokens: ${this._messageManager.settings.maxInputTokens}`,
+				// TODO: Implement token cutting logic when needed
+				// For now, just log the issue
+				this.logger.warn(
+					"Max token limit reached - consider reducing message history",
 				);
-				this._messageManager.cutMessages();
-			} else if (errorMsg.includes("Could not parse response")) {
-				// Give model a hint how output should look like
-				const enhancedErrorMsg =
-					errorMsg + "\n\nReturn a valid JSON object with the required fields.";
-				return [
-					{ error: enhancedErrorMsg, includeInMemory: true } as ActionResult,
-				];
 			}
-
-			this.state.consecutiveFailures += 1;
+		} else if (
+			errorMsg.includes("Could not parse response") ||
+			errorMsg.includes("tool_use_failed")
+		) {
+			// Give model a hint how output should look like
+			this.logger.debug(`Model: ${this.llm.model} failed`);
+			errorMsg += "\n\nReturn a valid JSON object with the required fields.";
+			this.logger.error(`${prefix}${errorMsg}`);
 		} else {
-			if (
-				error.message.includes("RateLimit") ||
-				error.message.includes("ResourceExhausted")
-			) {
-				logger.warn(`${prefix}`, error);
-				await new Promise((resolve) =>
-					setTimeout(resolve, this.settings.retryDelay * 1000),
-				);
-				this.state.consecutiveFailures += 1;
+			// Handle rate limit errors from different providers
+			const isRateLimitError =
+				error.name === "RateLimitError" || // OpenAI
+				error.name === "ResourceExhausted" || // Google
+				error.name === "AnthropicRateLimitError" || // Anthropic
+				errorMsg.includes("RateLimit") ||
+				errorMsg.includes("on tokens per minute (TPM): Limit") ||
+				errorMsg.includes("rate_limit_exceeded") ||
+				errorMsg.includes("quota_exceeded");
+
+			if (isRateLimitError) {
+				this.logger.warn(`${prefix}${errorMsg}`);
+				await this.sleep(this.settings.retryDelay * 1000);
 			} else {
-				logger.error(`${prefix}`, error);
-				this.state.consecutiveFailures += 1;
+				this.logger.error(`${prefix}${errorMsg}`);
 			}
 		}
 
-		return [{ error: errorMsg, includeInMemory: true } as ActionResult];
+		return [{ error: errorMsg, includeInMemory: true }];
 	}
 
-	private makeHistoryItem(
+	/**Create and store history item*/
+	private _makeHistoryItem(
 		modelOutput: AgentOutput | null,
-		state: BrowserState,
+		browserStateSummary: BrowserStateSummary,
 		result: ActionResult[],
 		metadata?: StepMetadata,
 	): void {
-		let interactedElements;
+		let interactedElements: Array<DOMHistoryElement | null> = [null];
 
 		if (modelOutput) {
 			interactedElements = AgentHistory.getInteractedElement(
 				modelOutput,
-				state.selectorMap,
+				browserStateSummary.selectorMap,
 			);
-		} else {
-			interactedElements = [null];
 		}
 
 		const stateHistory = new BrowserStateHistory(
-			state.url,
-			state.title,
-			state.tabs,
+			browserStateSummary.url,
+			browserStateSummary.title,
+			browserStateSummary.tabs,
 			interactedElements,
-			state.screenshot,
+			browserStateSummary.screenshot,
 		);
 
-		const historyItem = {
+		const historyItem = new AgentHistory(
 			modelOutput,
 			result,
-			state: stateHistory,
+			stateHistory,
 			metadata,
-		} as AgentHistory;
+		);
 
 		this.state.history.history.push(historyItem);
 	}
-
-	private removeThinkTags(text: string): string {
+	private _removeThinkTags(text: string): string {
 		// Step 1: Remove well-formed <think>...</think>
-		text = text.replace(/<think>[\s\S]*?<\/think>/g, "");
+		text = text.replace(/<think>.*?<\/think>/gs, "");
 		// Step 2: If there's an unmatched closing tag </think>,
 		//         remove everything up to and including that.
-		text = text.replace(/[\s\S]*?<\/think>/g, "");
+		text = text.replace(/.*?<\/think>/gs, "");
 		return text.trim();
 	}
 
-	private convertInputMessages(inputMessages: BaseMessage[]): BaseMessage[] {
-		if (
-			this.modelName &&
-			(this.modelName.includes("deepseek-reasoner") ||
-				this.modelName.includes("deepseek-r1"))
-		) {
-			return convertInputMessages(inputMessages, this.modelName);
-		} else {
-			return inputMessages;
-		}
-	}
+	/**
+	 * Get next action from LLM based on current state
+	 */
+	@timeExecution("--getNextAction (agent)")
+	async getNextAction(inputMessages: BaseMessage[]): Promise<AgentOutput> {
+		// this.logger.debug(`---->getNextAction inputMessages: ${inputMessages}`);
+		this.logger.debug(
+			`---->getNextAction this.AgentOutput: ${this.AgentOutput}`,
+		);
 
-	@timeExecution("--getNextAction(agent)")
-	public async getNextAction(
-		inputMessages: BaseMessage[],
-	): Promise<AgentOutput> {
-		inputMessages = this.convertInputMessages(inputMessages);
-		let parsed: AgentOutput;
-
-		if (this.toolCallingMethod === "raw") {
-			const output = await this.llm.invoke(inputMessages);
-			// Handle the case where output.content might be an array
-			let contentString: string;
-			if (Array.isArray(output.content)) {
-				// Extract text from array of content objects
-				contentString = output.content
-					.filter((item) => item.type === "text")
-					.map((item: any) => item.text)
-					.join("");
-			} else {
-				contentString = String(output.content);
-			}
-
-			const cleanedContent = this.removeThinkTags(contentString);
-			output.content = cleanedContent;
-
-			try {
-				const parsedJson = extractJsonFromModelOutput(cleanedContent);
-
-				// Validate the parsed JSON structure
-				if (!parsedJson || typeof parsedJson !== "object") {
-					throw new Error("Invalid JSON structure");
-				}
-
-				if (
-					!parsedJson.currentState ||
-					typeof parsedJson.currentState !== "object"
-				) {
-					throw new Error("Missing or invalid currentState in parsed JSON");
-				}
-
-				if (!parsedJson.action || !Array.isArray(parsedJson.action)) {
-					throw new Error("Missing or invalid action array in parsed JSON");
-				}
-
-				parsed = new this.AgentOutput(
-					parsedJson.currentState,
-					parsedJson.action,
-				);
-			} catch (e) {
-				logger.warn("Failed to parse model output", e);
-				throw new Error("Could not parse response.");
-			}
-		} else if (this.toolCallingMethod === null) {
-			const structuredLLM = this.llm.withStructuredOutput(this.AgentOutput, {
-				includeRaw: true,
-			});
-			const response = await structuredLLM.invoke(inputMessages);
-			const parsedJson = this.parseResponseJson(response);
-			parsed = new this.AgentOutput(parsedJson.currentState, parsedJson.action);
-		} else {
-			const agentOutputSchema = this.AgentOutput.schemaWithCustomActions(
-				this.ActionModel,
+		// Defensive check: ensure AgentOutput is defined
+		if (!this.AgentOutput) {
+			this.logger.warn(
+				"---->⚠️ this.AgentOutput is undefined, re-initializing action models",
 			);
-			const structuredLLM = this.llm.withStructuredOutput(agentOutputSchema, {
-				includeRaw: true,
-				method: this.toolCallingMethod,
-			});
-			const response = await structuredLLM.invoke(inputMessages);
-			const parsedJson = this.parseResponseJson(response);
-			parsed = new this.AgentOutput(parsedJson.currentState, parsedJson.action);
+			this._setupActionModels();
+			if (!this.AgentOutput) {
+				throw new Error(
+					"---->Failed to initialize AgentOutput - this.AgentOutput is still undefined after _setupActionModels()",
+				);
+			}
 		}
-		if (parsed === null) {
-			throw new Error("Could not parse response.");
+
+		// Additional type safety check - ensure it's a proper class constructor
+		if (typeof this.AgentOutput !== "function") {
+			this.logger.error(
+				`---->❌ this.AgentOutput is not a function: ${typeof this.AgentOutput}, value: ${this.AgentOutput}`,
+			);
+			this._setupActionModels();
+			if (typeof this.AgentOutput !== "function") {
+				throw new Error(
+					"---->Failed to initialize AgentOutput - this.AgentOutput is not a proper class constructor",
+				);
+			}
 		}
-		// cut the number of actions to max_actions_per_step if needed
-		if (parsed.action.length > this.settings.maxActionsPerStep) {
+
+		const response = await this.llm.ainvoke(inputMessages, this.AgentOutput);
+		this.logger.debug(
+			`---->getNextAction response: ${JSON.stringify(response, null, 2)}`,
+		);
+		const parsed = response.completion as unknown as AgentOutput;
+
+		// Cut the number of actions to maxActionsPerStep if needed
+		this.logger.debug(
+			`---->getNextAction parsed: ${JSON.stringify(parsed, null, 2)}`,
+		);
+		if (
+			parsed.action &&
+			parsed.action.length > this.settings.maxActionsPerStep
+		) {
 			parsed.action = parsed.action.slice(0, this.settings.maxActionsPerStep);
 		}
-		logResponse(parsed);
+
+		if (!(this.state.paused || this.state.stopped)) {
+			logResponse(parsed, this.controller.registry.registry, this.logger);
+		}
+
+		this._logNextActionSummary(parsed);
 		return parsed;
 	}
-	/**
-	 * Parse the JSON response from the LLM
-	 * @private
-	 * @param response - The response from the LLM
-	 * @returns The parsed JSON or null if parsing fails
-	 */
-	private parseResponseJson(response: any): any {
-		if (
-			!response ||
-			typeof response !== "object" ||
-			!("parsed" in response) ||
-			!("raw" in response)
-		) {
-			throw new Error("Failed to get LLM Response");
+
+	/**Log the agent run*/
+	_logAgentRun(): void {
+		this.logger.info(`🚀 Starting task: ${this.task}`);
+		this.logger.debug(
+			`🤖 BrowserNode Library Version ${this.version} (${this.source})`,
+		);
+	}
+
+	/**Log step context information*/
+	private _logStepContext(
+		currentPage: any,
+		browserStateSummary: BrowserStateSummary,
+	): void {
+		const urlShort =
+			currentPage.url.length > 50
+				? currentPage.url.substring(0, 50) + "..."
+				: currentPage.url;
+		const interactiveCount = Object.keys(
+			browserStateSummary.selectorMap || {},
+		).length;
+		this.logger.info(
+			`📍 Step ${this.state.nSteps}: Evaluating page with ${interactiveCount} interactive elements on: ${urlShort}`,
+		);
+	}
+
+	/**Log a comprehensive summary of the next action(s)*/
+	private _logNextActionSummary(parsed: AgentOutput): void {
+		if (!this.logger.level || this.logger.level !== "debug" || !parsed.action) {
+			return;
 		}
-		let parsedJson;
-		if (response.parsed && response.parsed.action) {
-			parsedJson = response.parsed;
-		}
-		// Fix for when tool_calls exist but parsed is null
-		if (
-			!response.parsed &&
-			response.raw &&
-			response.raw.additional_kwargs &&
-			response.raw.additional_kwargs.tool_calls &&
-			response.raw.additional_kwargs.tool_calls.length > 0
-		) {
-			const toolCall = response.raw.additional_kwargs.tool_calls[0];
-			if (toolCall && toolCall.function && toolCall.function.arguments) {
-				try {
-					const removeEscapeCharactersParsedJson =
-						toolCall.function.arguments.replace(/\\(.)/g, "$1");
-					parsedJson = JSON.parse(removeEscapeCharactersParsedJson);
-				} catch (e) {
-					logger.warn(
-						"Failed to parse tool call arguments as JSON, trying extractJsonFromModelOutput",
-						e,
-					);
-					// If the direct JSON.parse fails, try using the enhanced extraction method
-					try {
-						parsedJson = extractJsonFromModelOutput(
-							toolCall.function.arguments,
-						);
-					} catch (extractError) {
-						logger.warn(
-							"Both JSON parsing methods failed for tool call arguments",
-							{
-								originalError: e,
-								extractError: extractError,
-								arguments: toolCall.function.arguments.substring(0, 200), // Log first 200 chars for debugging
-							},
-						);
+
+		const actionCount = parsed.action.length;
+		// Collect action details
+		const actionDetails: string[] = [];
+
+		for (let i = 0; i < parsed.action.length; i++) {
+			const action = parsed.action[i];
+			const actionData = modelDump(action) ? modelDump(action) : action;
+			const actionName = Object.keys(actionData)[0] || "unknown";
+			const actionParams = actionData[actionName] || {};
+			// Format key parameters concisely
+			const paramSummary: string[] = [];
+			if (typeof actionParams === "object" && actionParams !== null) {
+				for (const [key, value] of Object.entries(actionParams)) {
+					if (key === "index") {
+						paramSummary.push(`#${value}`);
+					} else if (key === "text" && typeof value === "string") {
+						const textPreview =
+							value.length > 30 ? value.substring(0, 30) + "..." : value;
+						paramSummary.push(`text="${textPreview}"`);
+					} else if (key === "url") {
+						paramSummary.push(`url="${value}"`);
+					} else if (key === "success") {
+						paramSummary.push(`success=${value}`);
+					} else if (
+						typeof value === "string" ||
+						typeof value === "number" ||
+						typeof value === "boolean"
+					) {
+						const valStr = String(value);
+						const valPreview =
+							valStr.length > 30 ? valStr.substring(0, 30) + "..." : valStr;
+						paramSummary.push(`${key}=${valPreview}`);
 					}
 				}
 			}
+
+			const paramStr =
+				paramSummary.length > 0 ? `(${paramSummary.join(", ")})` : "";
+			actionDetails.push(`${actionName}${paramStr}`);
 		}
-		if (!parsedJson && response.raw.content) {
-			parsedJson = extractJsonFromModelOutput(String(response.raw.content));
+		// Create summary based on single vs multi-action
+		if (actionCount === 1) {
+			this.logger.info(`☝️ Decided next action: ${actionDetails[0]}`);
+		} else {
+			const summaryLines = [`✌️ Decided next ${actionCount} multi-actions:`];
+			for (let i = 0; i < actionDetails.length; i++) {
+				summaryLines.push(`          ${i + 1}. ${actionDetails[i]}`);
+			}
+			this.logger.info(summaryLines.join("\n"));
 		}
-		if (!parsedJson) {
-			throw new Error("Failed to parse LLM Response to tool call arguments");
-		}
-		return parsedJson;
 	}
-	/**
-	 * Log the agent run
-	 */
-	private logAgentRun(): void {
-		logger.info(`🚀 Starting task: ${this.task}`);
-		logger.debug(`Version: ${this.version}, Source: ${this.source}`);
+
+	/**Log step completion summary with action count, timing, and success/failure stats*/
+	private _logStepCompletionSummary(
+		stepStartTime: number,
+		result: ActionResult[],
+	): void {
+		if (result.length === 0) {
+			return;
+		}
+
+		const stepDuration = (Date.now() - stepStartTime) / 1000;
+		const actionCount = result.length;
+		// Count success and failures
+		const successCount = result.filter((r) => !r.error).length;
+		const failureCount = actionCount - successCount;
+		// Format success/failure indicators
+		const successIndicator = successCount > 0 ? `✅ ${successCount}` : "";
+		const failureIndicator = failureCount > 0 ? `❌ ${failureCount}` : "";
+		const statusParts = [successIndicator, failureIndicator].filter(
+			(part) => part,
+		);
+		const statusStr = statusParts.length > 0 ? statusParts.join(" | ") : "✅ 0";
+
+		this.logger.info(
+			`📍 Step ${this.state.nSteps}: Ran ${actionCount} actions in ${stepDuration.toFixed(2)}s: ${statusStr}`,
+		);
+	}
+
+	/**Send the agent event for this run to telemetry*/
+	private _logAgentEvent(
+		maxSteps: number,
+		agentRunError?: string | null,
+	): void {
+		const tokenSummary = this.tokenCostService.getUsageTokensForModel(
+			this.llm.model,
+		);
+
+		// Prepare action history data correctly
+		const actionHistoryData: any[] = [];
+		for (const item of this.state.history.history) {
+			if (item.modelOutput && item.modelOutput.action) {
+				// Convert each ActionModel in the step to its dictionary representation
+				const stepActions = item.modelOutput.action
+					.filter((action) => action) // Ensure action is not null/undefined
+					.map((action) => modelDump(action, true));
+				actionHistoryData.push(stepActions);
+			} else {
+				// Append null if a step had no actions or no model output
+				actionHistoryData.push(null);
+			}
+		}
+
+		const finalRes = this.state.history.finalResult();
+		const finalResultStr = finalRes !== null ? JSON.stringify(finalRes) : null;
+
+		this.telemetry.capture({
+			task: this.task,
+			model: this.llm.model,
+			modelProvider: this.llm.provider,
+			plannerLlm: this.settings.plannerLLM?.model || null,
+			maxSteps,
+			maxActionsPerStep: this.settings.maxActionsPerStep,
+			useVision: this.settings.useVision,
+			useValidation: this.settings.validateOutput,
+			version: this.version,
+			source: this.source,
+			actionErrors: this.state.history.errors(),
+			actionHistory: actionHistoryData,
+			urlsVisited: this.state.history.urls(),
+			steps: this.state.nSteps,
+			totalInputTokens: tokenSummary.promptTokens,
+			totalDurationSeconds: this.state.history.totalDurationSeconds(),
+			success: this.state.history.isSuccessful(),
+			finalResultResponse: finalResultStr,
+			errorMessage: agentRunError || null,
+		} as AgentTelemetryEvent);
 	}
 
 	/**
-	 * Take a step
-	 * @returns [boolean, boolean]:[isDone, isValid]
+	 * Take a single step
+	 * @returns completion status
 	 */
-	public async takeStep(): Promise<[boolean, boolean]> {
-		await this.step();
+	async takeStep(stepInfo?: AgentStepInfo): Promise<[boolean, boolean]> {
+		await this.step(stepInfo);
 
 		if (this.state.history.isDone()) {
-			if (this.settings.validateOutput) {
-				if (!(await this.validateOutput())) {
-					return [true, false];
-				}
-			}
-
 			await this.logCompletion();
 			if (this.registerDoneCallback) {
-				const callback = this.registerDoneCallback;
-				if (callback.constructor.name === "AsyncFunction") {
-					await callback(this.state.history);
+				if (this.isAsyncFunction(this.registerDoneCallback)) {
+					await this.registerDoneCallback(this.state.history);
 				} else {
-					callback(this.state.history);
+					this.registerDoneCallback(this.state.history);
 				}
 			}
 			return [true, true];
@@ -894,233 +1267,408 @@ export class Agent<T = Context> {
 		return [false, false];
 	}
 
-	@timeExecution("--run(agent)")
-	async run(maxSteps: number = 100): Promise<AgentHistoryList> {
+	/**
+	 * Execute the task with maximum number of steps
+	 * @param maxSteps - Maximum number of steps to execute
+	 * @param options - Optional options
+	 * @returns AgentHistoryList
+	 */
+	@timeExecution("--run (agent)")
+	async run(
+		maxSteps = 100,
+		options: {
+			onStepStart?: AgentHookFunc<Context>;
+			onStepEnd?: AgentHookFunc<Context>;
+		} = {},
+	): Promise<AgentHistoryList> {
+		const { onStepStart, onStepEnd } = options;
+		let agentRunError: string | null = null; // Initialize error tracking variable
+		this.forceExitTelemetryLogged = false; // Flag for custom telemetry on force exit
+
+		// Set up the signal handler with callbacks specific to this agent
+		const onForceExitLogTelemetry = () => {
+			this._logAgentEvent(maxSteps, "SIGINT: Cancelled by user");
+			// Call the flush method on the telemetry instance
+			if (this.telemetry) {
+				this.telemetry.flush();
+			}
+			this.forceExitTelemetryLogged = true; // Set the flag
+		};
+
+		const signalHandler = new SignalHandler({
+			pauseCallback: () => this.pause(),
+			resumeCallback: () => this.resume(),
+			customExitCallback: onForceExitLogTelemetry, // Pass the new telemetry callback
+			exitOnSecondInt: true,
+		});
+		signalHandler.register();
+
 		try {
-			this.logAgentRun();
+			this._logAgentRun();
+
+			// Initialize timing for session and task
+			this._sessionStartTime = Date.now();
+			this._taskStartTime = this._sessionStartTime; // Initialize task start time
+
+			// Emit CreateAgentSessionEvent at the START of run()
+			if (this.eventbus) {
+				this.eventbus.dispatch(CreateAgentSessionEvent.fromAgent(this));
+			}
+
+			// Emit CreateAgentTaskEvent at the START of run()
+			if (this.eventbus) {
+				this.eventbus.dispatch(CreateAgentTaskEvent.fromAgent(this));
+			}
 
 			// Execute initial actions if provided
 			if (this.initialActions) {
-				logger.info(`Executing ${this.initialActions.length} initial actions`);
 				const result = await this.multiAct(this.initialActions, false);
 				this.state.lastResult = result;
-				logger.info(`Initial actions completed with ${result.length} results`);
-			} else {
-				logger.debug("No initial actions to execute");
 			}
 
+			// Main execution loop
 			for (let step = 0; step < maxSteps; step++) {
-				// Check if we should stop due to too many failures
+				// Replace the polling with clean pause-wait
+				if (this.state.paused) {
+					await this.waitUntilResumed();
+					signalHandler.reset();
+				}
+
+				// Check if we should stop due to failures
 				if (this.state.consecutiveFailures >= this.settings.maxFailures) {
-					logger.error(
+					this.logger.error(
 						`❌ Stopping due to ${this.settings.maxFailures} consecutive failures`,
 					);
+					agentRunError = `Stopped due to ${this.settings.maxFailures} consecutive failures`;
 					break;
 				}
 
 				// Check control flags before each step
 				if (this.state.stopped) {
-					logger.info("Agent stopped");
+					this.logger.info("🛑 Agent stopped");
+					agentRunError = "Agent stopped programmatically";
 					break;
 				}
 
 				while (this.state.paused) {
-					await new Promise((resolve) => setTimeout(resolve, 200)); // Small delay to prevent CPU spinning
+					await this.sleep(200); // Small delay to prevent CPU spinning
 					if (this.state.stopped) {
 						// Allow stopping while paused
+						agentRunError = "Agent stopped programmatically while paused";
 						break;
 					}
 				}
+
+				// Execute step hooks
+				if (onStepStart) {
+					await onStepStart(this);
+				}
+
 				const stepInfo = new AgentStepInfo(step, maxSteps);
 				await this.step(stepInfo);
+
+				if (onStepEnd) {
+					await onStepEnd(this);
+				}
+
+				// Check if done
 				if (this.state.history.isDone()) {
-					if (this.settings.validateOutput && step < maxSteps - 1) {
-						if (!(await this.validateOutput())) {
-							continue;
+					await this.logCompletion();
+
+					if (this.registerDoneCallback) {
+						if (this.isAsyncFunction(this.registerDoneCallback)) {
+							await this.registerDoneCallback(this.state.history);
+						} else {
+							this.registerDoneCallback(this.state.history);
 						}
 					}
 
-					await this.logCompletion();
+					// Task completed
 					break;
 				}
 			}
 
-			// If loop completes without breaking
-			if (!this.state.history.isDone()) {
-				console.info("❌ Failed to complete task in maximum steps");
+			// Handle max steps reached (using else block equivalent)
+			if (!this.state.history.isDone() && !agentRunError) {
+				agentRunError = "Failed to complete task in maximum steps";
+				this.state.history.history.push(
+					new AgentHistory(
+						null,
+						[{ error: agentRunError, includeInMemory: true }],
+						new BrowserStateHistory("", "", [], [], null),
+						undefined,
+					),
+				);
+				this.logger.info(`❌ ${agentRunError}`);
 			}
+
+			// Set usage summary
+			this.state.history.usage = await this.tokenCostService.getUsageSummary();
+
+			// Set the model output schema and call it on the fly
+			if (!this.state.history._outputModelSchema && this.outputModelSchema) {
+				this.state.history._outputModelSchema = this.outputModelSchema;
+			}
+
 			return this.state.history;
-		} finally {
-			this.telemetry.capture({
-				agentId: this.state.agentId,
-				isDone: this.state.history.isDone(),
-				success: this.state.history.isSuccessful(),
-				steps: this.state.nSteps,
-				maxStepsReached: this.state.nSteps >= maxSteps,
-				errors: this.state.history.errors(),
-				totalInputTokens: this.state.history.totalInputTokens(),
-				totalDurationSeconds: this.state.history.totalDurationSeconds(),
-			});
-
-			await this.close();
-
-			if (this.settings.generateGif) {
-				let outputPath = "agent_history.gif";
-				if (typeof this.settings.generateGif === "string") {
-					outputPath = this.settings.generateGif;
-				}
-
-				createHistoryGif(this.task, this.state.history, {
-					outputPath,
-				});
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				error.message.includes("KeyboardInterrupt")
+			) {
+				// Already handled by our signal handler, but catch any direct KeyboardInterrupt as well
+				this.logger.info(
+					"Got KeyboardInterrupt during execution, returning current history",
+				);
+				agentRunError = "KeyboardInterrupt";
+				this.state.history.usage =
+					await this.tokenCostService.getUsageSummary();
+				return this.state.history;
 			}
+
+			this.logger.error(`Agent run failed with exception: ${error}`);
+			agentRunError = String(error);
+			throw error;
+		} finally {
+			// Log token usage summary
+			await this.tokenCostService.logUsageSummary();
+
+			// Unregister signal handlers before cleanup
+			signalHandler.unregister();
+
+			if (!this.forceExitTelemetryLogged) {
+				try {
+					this._logAgentEvent(maxSteps, agentRunError);
+				} catch (logError) {
+					this.logger.error(`Failed to log telemetry event: ${logError}`);
+				}
+			} else {
+				// Info message when custom telemetry for SIGINT was already logged
+				this.logger.info(
+					"Telemetry for force exit (SIGINT) was logged by custom exit callback.",
+				);
+			}
+
+			// NOTE: CreateAgentSessionEvent and CreateAgentTaskEvent are now emitted at the START of run()
+			// to match backend requirements for CREATE events to be fired when entities are created,
+			// not when they are completed
+
+			// Emit UpdateAgentTaskEvent at the END of run() with final task state
+			if (this.eventbus) {
+				this.eventbus.dispatch(UpdateAgentTaskEvent.fromAgent(this));
+			}
+
+			// Generate GIF if needed before stopping event bus
+			if (this.settings.generateGif) {
+				const outputPath =
+					typeof this.settings.generateGif === "string"
+						? this.settings.generateGif
+						: "agent_history.gif";
+
+				try {
+					await createHistoryGif(this.task, this.state.history, { outputPath });
+
+					// Emit output file generated event for GIF
+					if (this.eventbus) {
+						const outputEvent =
+							await CreateAgentOutputFileEvent.fromAgentAndFile(
+								this,
+								outputPath,
+							);
+						this.eventbus.dispatch(outputEvent);
+					}
+				} catch (error) {
+					this.logger.warn(`Failed to create GIF: ${error}`);
+				}
+			}
+
+			// Wait briefly for cloud auth to start and print the URL, but don't block for completion
+			if (this.enableCloudSync && this.cloudSync) {
+				// Cloud sync authentication handling would go here
+				// We'll skip this for now as it's complex async handling
+			}
+
+			// Stop the event bus gracefully, waiting for all events to be processed
+			// Use longer timeout to avoid deadlocks in tests with multiple agents
+			if (this.eventbus) {
+				try {
+					await this.eventbus.stop(10.0); // 10 second timeout
+				} catch (error) {
+					this.logger.warn(`Event bus stop timeout: ${error}`);
+				}
+			}
+
+			// Cleanup
+			await this.close();
 		}
 	}
 
+	/**
+	 * Execute multiple actions
+	 */
 	@timeExecution("--multiAct(agent)")
 	async multiAct(
 		actions: ActionModel[],
-		checkForNewElements: boolean = true,
+		checkForNewElements = true,
 	): Promise<ActionResult[]> {
 		const results: ActionResult[] = [];
-		const cachedSelectorMap = await this.browserContext.getSelectorMap();
+
+		if (!this.browserSession) {
+			throw new Error("BrowserSession is not set up");
+		}
+
+		const cachedSelectorMap = await this.browserSession.getSelectorMap();
 		const cachedPathHashes = new Set(
-			Array.from(Object.values(cachedSelectorMap)).map(
-				(e) => e.hash.branchPathHash,
-			),
+			Object.values(cachedSelectorMap).map((e) => e.hash.branchPathHash),
 		);
 
-		await this.browserContext.removeHighlights();
-		for (let i = 0; i < actions.length; i++) {
-			const action = actions[i]!;
-			if (action.getIndex() !== null && i !== 0) {
-				const newState = await this.browserContext.getState();
-				const newPathHashes = new Set(
-					Array.from(Object.values(newState.selectorMap)).map(
-						(e) => e.hash.branchPathHash,
-					),
-				);
+		await this.browserSession.removeHighlights();
 
-				if (checkForNewElements && !isSubset(newPathHashes, cachedPathHashes)) {
-					// next action requires index but there are new elements on the page
-					const msg = `Something new appeared after action ${i} / ${actions.length}`;
-					logger.info(msg);
-					results.push({ extractedContent: msg, includeInMemory: true });
+		for (let i = 0; i < actions.length; i++) {
+			const action = actions[i];
+			if (!action) {
+				this.logger.warn(`Action at index ${i} is null or undefined, skipping`);
+				continue;
+			}
+
+			// Don't allow 'done' as a single action after other actions
+			if (i > 0 && action.modelDump && action.modelDump().done) {
+				const msg = `Done action is allowed only as a single action - stopped after action ${i} / ${actions.length}.`;
+				this.logger.info(msg);
+				break;
+			}
+
+			// Check for index changes after previous action
+			if (action.getIndex && action.getIndex() !== null && i !== 0) {
+				const newBrowserStateSummary =
+					await this.browserSession.getStateSummary(false);
+				const newSelectorMap = newBrowserStateSummary.selectorMap;
+
+				const actionIndex = action.getIndex();
+				if (actionIndex === null) {
+					continue;
+				}
+				// Detect index change after previous action
+				const origTarget = cachedSelectorMap[actionIndex];
+				const origTargetHash = origTarget?.hash.branchPathHash;
+				const newTarget = newSelectorMap[actionIndex];
+				const newTargetHash = newTarget?.hash.branchPathHash;
+
+				if (origTargetHash !== newTargetHash) {
+					const msg = `Element index changed after action ${i} / ${actions.length}, because page changed.`;
+					this.logger.info(msg);
+					results.push({
+						extractedContent: msg,
+						includeInMemory: true,
+						longTermMemory: msg,
+					});
+					break;
+				}
+
+				const newPathHashes = new Set(
+					Object.values(newSelectorMap).map((e) => e.hash.branchPathHash),
+				);
+				if (
+					checkForNewElements &&
+					!this.isSubset(newPathHashes, cachedPathHashes)
+				) {
+					const msg = `Something new appeared after action ${i} / ${actions.length}, following actions are NOT executed and should be retried.`;
+					this.logger.info(msg);
+					results.push({
+						extractedContent: msg,
+						includeInMemory: true,
+						longTermMemory: msg,
+					});
 					break;
 				}
 			}
 
-			await this.raiseIfStoppedOrPaused();
+			try {
+				await this._raiseIfStoppedOrPaused();
 
-			const result = await this.controller.act(
-				action,
-				this.browserContext,
-				this.settings.pageExtractionLLM,
-				this.sensitiveData,
-				this.settings.availableFilePaths,
-				{ context: this.context },
-			);
+				const result = await this.controller.act(
+					action,
+					this.browserSession,
+					this.settings.pageExtractionLLM,
+					this.sensitiveData,
+					this.settings.availableFilePaths,
+					this.fileSystem,
+					this.context,
+				);
 
-			results.push(result);
-			if (
-				results[results.length - 1]?.isDone ||
-				results[results.length - 1]?.error ||
-				i === actions.length - 1
-			) {
-				break;
+				results.push(result);
+
+				// Get action name for logging
+				const actionData = action.modelDump ? action.modelDump() : action;
+				const actionName = Object.keys(actionData)[0] || "unknown";
+				const actionParams = actionData[actionName] || "";
+				this.logger.info(
+					`☑️ Executed action ${i + 1}/${actions.length}: ${actionName}(${actionParams})`,
+				);
+
+				const lastResult = results[results.length - 1];
+				if (
+					lastResult?.isDone ||
+					lastResult?.error ||
+					i === actions.length - 1
+				) {
+					break;
+				}
+
+				await this.sleep(this.browserProfile.waitBetweenActions);
+			} catch (error) {
+				if (error instanceof Error && error.message.includes("cancelled")) {
+					this.logger.info(`Action ${i + 1} was cancelled due to Ctrl+C`);
+					if (results.length === 0) {
+						results.push({
+							error: "The action was cancelled due to Ctrl+C",
+							includeInMemory: true,
+						});
+					}
+					throw new Error("Action cancelled by user");
+				}
+				throw error;
 			}
-
-			await new Promise((resolve) =>
-				setTimeout(resolve, this.browserContext.config.waitBetweenActions),
-			);
 		}
 
 		return results;
 	}
 
-	async validateOutput(): Promise<boolean> {
-		const systemMsg =
-			`You are a validator of an agent who interacts with a browser. ` +
-			`Validate if the output of last action is what the user wanted and if the task is completed. ` +
-			`If the task is unclear defined, you can let it pass. But if something is missing or the image does not show what was requested dont let it pass. ` +
-			`Try to understand the page and help the model with suggestions like scroll, do x, ... to get the solution right. ` +
-			`Task to validate: ${this.task}. Return a JSON object with 2 keys: is_valid and reason. ` +
-			`is_valid is a boolean that indicates if the output is correct. ` +
-			`reason is a string that explains why it is valid or not.` +
-			` example: {"is_valid": false, "reason": "The user wanted to search for "cat photos", but the agent searched for "dog photos" instead."}`;
-		let msg: BaseMessage[] = [];
-		if (this.browserContext.session) {
-			const state = await this.browserContext.getState();
-			const content = new AgentMessagePrompt(
-				state,
-				this.state.lastResult,
-				this.settings.includeAttributes,
-			);
-
-			msg = [
-				new SystemMessage({ content: systemMsg }),
-				content.getUserMessage(this.settings.useVision),
-			];
-		} else {
-			// if no browser session, we can't validate the output
-			return true;
-		}
-		/**
-		 * Validation results.
-		 */
-		interface ValidationResult {
-			isValid: boolean;
-			reason: string;
-		}
-
-		const validator = this.llm.withStructuredOutput<ValidationResult>(
-			{
-				isValid: { type: "boolean" },
-				reason: { type: "string" },
-			},
-			{ includeRaw: true },
-		);
-
-		const response = await validator.invoke(msg);
-		const parsed: ValidationResult = response.parsed;
-
-		const isValid = parsed.isValid;
-		if (!isValid) {
-			logger.info(`❌ Validator decision: ${parsed.reason}`);
-			const msg = `The output is not yet correct. ${parsed.reason}.`;
-			this.state.lastResult = [
-				{ extractedContent: msg, includeInMemory: true },
-			];
-		} else {
-			logger.info(`✅ Validator decision: ${parsed.reason}`);
-		}
-
-		return isValid;
-	}
-
+	/**
+	 * Log completion of the task
+	 */
 	async logCompletion(): Promise<void> {
-		logger.info("✅ Task completed");
 		if (this.state.history.isSuccessful()) {
-			logger.info("✅ Successfully");
+			this.logger.info("✅ Task completed successfully");
 		} else {
-			logger.info("❌ Unfinished");
-		}
-
-		if (this.registerDoneCallback) {
-			if (isAsyncFunction(this.registerDoneCallback)) {
-				await this.registerDoneCallback(this.state.history);
-			} else {
-				this.registerDoneCallback(this.state.history);
-			}
+			this.logger.info("❌ Task completed without success");
 		}
 	}
 
+	/**
+	 * Rerun a saved history of actions with error handling and retry logic.
+	 *
+	 * @param history - The history to replay
+	 * @param maxRetries - Maximum number of retries per action
+	 * @param skipFailures - Whether to skip failed actions or stop execution
+	 * @param delayBetweenActions - Delay between actions in seconds
+	 * @returns List of action results
+	 */
+	@timeExecution("--rerun_history (agent)")
 	async rerunHistory(
 		history: AgentHistoryList,
-		maxRetries: number = 1,
-		skipFailures: boolean = true,
-		delayBetweenActions: number = 2.0,
+		options: {
+			maxRetries?: number;
+			skipFailures?: boolean;
+			delayBetweenActions?: number;
+		} = {},
 	): Promise<ActionResult[]> {
+		const {
+			maxRetries = 3,
+			skipFailures = true,
+			delayBetweenActions = 2.0,
+		} = options;
+
 		// Execute initial actions if provided
 		if (this.initialActions) {
 			const result = await this.multiAct(this.initialActions);
@@ -1130,47 +1678,67 @@ export class Agent<T = Context> {
 		const results: ActionResult[] = [];
 
 		for (let i = 0; i < history.history.length; i++) {
-			const historyItem = history.history[i]!;
+			const historyItem = history.history[i];
+
+			// Check if historyItem exists
+			if (!historyItem) {
+				this.logger.warn(`Step ${i + 1}: History item is undefined, skipping`);
+				results.push({
+					error: "History item is undefined",
+					includeInMemory: false,
+				});
+				continue;
+			}
+
 			const goal = historyItem.modelOutput?.currentState.nextGoal || "";
-			logger.info(
+			this.logger.info(
 				`Replaying step ${i + 1}/${history.history.length}: goal: ${goal}`,
 			);
 
 			if (
 				!historyItem.modelOutput ||
 				!historyItem.modelOutput.action ||
-				historyItem.modelOutput.action[0] === null
+				historyItem.modelOutput.action.length === 0 ||
+				historyItem.modelOutput.action.every((action) => action === null)
 			) {
-				logger.warn(`Step ${i + 1}: No action to replay, skipping`);
-				results.push(new ActionResult({ error: "No action to replay" }));
+				this.logger.warn(`Step ${i + 1}: No action to replay, skipping`);
+				results.push({
+					error: "No action to replay",
+					includeInMemory: false,
+				});
 				continue;
 			}
 
 			let retryCount = 0;
 			while (retryCount < maxRetries) {
 				try {
-					const result = await this.executeHistoryStep(
+					const result = await this._executeHistoryStep(
 						historyItem,
 						delayBetweenActions,
 					);
 					results.push(...result);
 					break;
-				} catch (e: any) {
+				} catch (error) {
 					retryCount++;
 					if (retryCount === maxRetries) {
-						const errorMsg = `Step ${i + 1} failed after ${maxRetries} attempts: ${e.toString()}`;
-						logger.error(errorMsg);
+						const errorMsg = `Step ${i + 1} failed after ${maxRetries} attempts: ${error}`;
+						this.logger.error(errorMsg);
 						if (!skipFailures) {
-							results.push(new ActionResult({ error: errorMsg }));
+							results.push({
+								error: errorMsg,
+								includeInMemory: true,
+							});
 							throw new Error(errorMsg);
 						}
+						results.push({
+							error: errorMsg,
+							includeInMemory: false,
+						});
 					} else {
-						logger.warn(
+						this.logger.warn(
 							`Step ${i + 1} failed (attempt ${retryCount}/${maxRetries}), retrying...`,
 						);
-						await new Promise((resolve) =>
-							setTimeout(resolve, delayBetweenActions * 1000),
-						);
+						await this.sleep(delayBetweenActions * 1000); // Convert seconds to milliseconds
 					}
 				}
 			}
@@ -1179,69 +1747,122 @@ export class Agent<T = Context> {
 		return results;
 	}
 
-	private async executeHistoryStep(
+	/**
+	 * Execute a single step from history with element validation
+	 *
+	 */
+	async _executeHistoryStep(
 		historyItem: AgentHistory,
-		delay: number,
+		delayBetweenActions: number,
 	): Promise<ActionResult[]> {
-		const state = await this.browserContext.getState();
+		if (!this.browserSession) {
+			throw new Error("BrowserSession is not set up");
+		}
+
+		const state = await this.browserSession.getStateSummary(false);
 		if (!state || !historyItem.modelOutput) {
 			throw new Error("Invalid state or model output");
 		}
 
-		const updatedActions: (ActionModel | null)[] = [];
+		const updatedActions: ActionModel[] = [];
+
 		for (let i = 0; i < historyItem.modelOutput.action.length; i++) {
-			const updatedAction = await this.updateActionIndices(
-				historyItem.modelOutput.action[i]!,
+			const action = historyItem.modelOutput.action[i];
+			if (!action) {
+				throw new Error(`Action at index ${i} is undefined`);
+			}
+
+			const interactedElement =
+				historyItem.state?.interactedElement?.[i] || null;
+
+			const updatedAction = await this._updateActionIndices(
+				interactedElement,
+				action,
 				state,
-				historyItem.state.interactedElement[i],
 			);
-			updatedActions.push(updatedAction);
 
 			if (updatedAction === null) {
 				throw new Error(`Could not find matching element ${i} in current page`);
 			}
+
+			updatedActions.push(updatedAction);
 		}
 
-		// Filter out null values and cast
-		const actions = updatedActions.filter((a): a is ActionModel => a !== null);
-		const result = await this.multiAct(actions);
+		const result = await this.multiAct(updatedActions);
 
-		await new Promise((resolve) => setTimeout(resolve, delay * 1000));
+		// Add delay after executing actions
+		if (delayBetweenActions > 0) {
+			await this.sleep(delayBetweenActions * 1000);
+		}
+
 		return result;
 	}
 
-	async updateActionIndices(
+	/**
+	 * Update action indices based on current page state.
+	 * Returns updated action or None if element cannot be found.
+	 * @private
+	 */
+	private async _updateActionIndices(
+		historicalElement: DOMHistoryElement | null,
 		action: ActionModel,
-		currentState: BrowserState,
-		historicalElement?: DOMHistoryElement | null,
+		browserStateSummary: BrowserStateSummary,
 	): Promise<ActionModel | null> {
-		if (!historicalElement || !currentState.elementTree) {
+		if (!historicalElement || !browserStateSummary.elementTree) {
 			return action;
 		}
 
 		const currentElement = HistoryTreeProcessor.findHistoryElementInTree(
 			historicalElement,
-			currentState.elementTree,
+			browserStateSummary.elementTree,
 		);
 
 		if (!currentElement || currentElement.highlightIndex === null) {
 			return null;
 		}
 
-		const oldIndex = action.getIndex();
+		const oldIndex = action.getIndex ? action.getIndex() : null;
 		if (oldIndex !== currentElement.highlightIndex) {
-			action.setIndex(currentElement.highlightIndex);
-			logger.info(
-				`Element moved in DOM, updated index from ${oldIndex} to ${currentElement.highlightIndex}`,
-			);
+			// Update the action's index
+			if (action.setIndex) {
+				action.setIndex(currentElement.highlightIndex);
+				this.logger.info(
+					`Element moved in DOM, updated index from ${oldIndex} to ${currentElement.highlightIndex}`,
+				);
+			} else {
+				// Fallback: recreate action with new index if setIndex method doesn't exist
+				const actionData = action.modelDump ? action.modelDump() : action;
+				const actionName = Object.keys(actionData)[0];
+				if (!actionName) {
+					return null;
+				}
+
+				const params = { ...actionData[actionName] };
+				params.index = currentElement.highlightIndex;
+
+				// Create new action instance
+				const newActionData: Record<string, any> = {};
+				newActionData[actionName] = params;
+				return new this.ActionModel(newActionData);
+			}
 		}
 
 		return action;
 	}
-
+	/**
+	 * Load history from file and rerun it.
+	 *
+	 * @param historyFile - Path to the history file
+	 * @param options - Additional arguments passed to rerunHistory
+	 * @returns List of action results
+	 */
 	async loadAndRerun(
-		historyFile?: string | typeof path,
-		options: any = {},
+		historyFile?: string | null,
+		options: {
+			maxRetries?: number;
+			skipFailures?: boolean;
+			delayBetweenActions?: number;
+		} = {},
 	): Promise<ActionResult[]> {
 		if (!historyFile) {
 			historyFile = "AgentHistory.json";
@@ -1253,215 +1874,543 @@ export class Agent<T = Context> {
 		);
 		return await this.rerunHistory(history, options);
 	}
+
 	/**
-	 * Save the history to a file
-	 * @param filePath - The path to the file to save the history to
+	 * Save the current history to a file
 	 */
-	saveHistory(filePath?: string | typeof path): void {
+	saveHistory(filePath?: string): void {
 		if (!filePath) {
 			filePath = "AgentHistory.json";
 		}
 		this.state.history.saveToFile(filePath);
 	}
+
 	/**
-	 * Pause the agent before the next step
+	 * Wait until the agent is resumed
+	 */
+	async waitUntilResumed(): Promise<void> {
+		await this._externalPauseEvent.wait();
+	}
+	/**
+	 * Pause the agent before the next step.
 	 */
 	pause(): void {
-		logger.info("🔄 pausing Agent ");
+		console.log(
+			"\n\n⏸️  Got [Ctrl+C], paused the agent and left the browser open.\n\tPress [Enter] to resume or [Ctrl+C] again to quit.",
+		);
 		this.state.paused = true;
+		this._externalPauseEvent.clear();
+		// Task paused
+
+		// The signal handler will handle the asyncio pause logic for us
+		// No need to duplicate the code here
 	}
+
 	/**
 	 * Resume the agent
 	 */
 	resume(): void {
-		logger.info("▶️ Agent resuming");
+		console.log(
+			"----------------------------------------------------------------------",
+		);
+		console.log(
+			"▶️  Got Enter, resuming agent execution where it left off...\n",
+		);
 		this.state.paused = false;
+		this._externalPauseEvent.set();
+		// Task resumed
+
+		// The signal handler should have already reset the flags
+		// through its reset() method when called from run()
+
+		// playwright browser is always immediately killed by the first Ctrl+C (no way to stop that)
+		// so we need to restart the browser if user wants to continue
+		// the constructor() method exists, even through its shows a linter error
+
+		// Restart browser if needed
+		if (this.browser) {
+			this.logger.info("🌎 Restarting/reconnecting to browser...");
+			// Browser restart logic would go here
+		}
 	}
+
 	/**
 	 * Stop the agent
 	 */
 	stop(): void {
-		logger.info("⏹️ Agent stopping");
+		this.logger.info("⏹️ Agent stopping");
 		this.state.stopped = true;
+		// Task stopped
 	}
-	/**
-	 * Convert dictionary-based actions to ActionModel instances
-	 * @param actions - The initial actions to convert
-	 * @returns The converted actions
-	 */
-	convertInitialActions(
-		actions: Record<string, Record<string, any>>[],
+
+	// Convert dictionary-based actions to ActionModel instances
+	private _convertInitialActions(
+		actions: Array<Record<string, Record<string, any>>>,
 	): ActionModel[] {
 		const convertedActions: ActionModel[] = [];
-		logger.debug(`Converting ${actions.length} initial actions`);
 
 		for (const actionDict of actions) {
 			// Each action_dict should have a single key-value pair
-			const actionName = Object.keys(actionDict)[0];
-			if (!actionName) {
-				logger.warn("No action name found in action dict");
-				continue;
+			const actionKeys = Object.keys(actionDict);
+			if (actionKeys.length === 0) {
+				throw new Error("Action dictionary is empty");
 			}
-
+			const actionName = actionKeys[0];
+			if (!actionName) {
+				throw new Error("Action name is undefined");
+			}
 			const params = actionDict[actionName];
+
 			if (!params) {
-				logger.warn(`No parameters found for action: ${actionName}`);
-				continue;
+				throw new Error(`No parameters found for action: ${actionName}`);
 			}
 
 			// Get the parameter model for this action from registry
 			const actionInfo =
 				this.controller.registry.registry.actions.get(actionName);
 			if (!actionInfo) {
-				logger.warn(`Action not found in registry: ${actionName}`);
-				logger.debug(
-					`Available actions: ${Array.from(this.controller.registry.registry.actions.keys()).join(", ")}`,
-				);
-				continue;
+				throw new Error(`Unknown action: ${actionName}`);
 			}
 
 			const paramModel = actionInfo.paramModel;
 
+			// Check if paramModel exists and is constructable
+			if (!paramModel || typeof paramModel !== "function") {
+				throw new Error(`Invalid parameter model for action: ${actionName}`);
+			}
+
 			// Create validated parameters using the appropriate param model
-			const validatedParams = params;
+			const ParamModelConstructor = paramModel as new (args: any) => any;
+			const validatedParams = new ParamModelConstructor(params);
 
 			// Create ActionModel instance with the validated parameters
-			const actionModel = new ActionModel({
-				[actionName]: validatedParams,
-			});
+			const actionModelData: Record<string, any> = {};
+			actionModelData[actionName] = validatedParams;
+			const actionModel = new this.ActionModel(actionModelData);
 			convertedActions.push(actionModel);
-			logger.debug(`Successfully converted action: ${actionName}`);
 		}
 
-		logger.debug(`Converted ${convertedActions.length} actions successfully`);
 		return convertedActions;
 	}
 
-	async runPlanner(): Promise<string | null> {
+	/**
+	 * Verify that the LLM API keys are setup and the LLM API is responding properly.
+	 * Also handles tool calling method detection if in auto mode.
+	 */
+	private _verifyAndSetupLLM(): void {
+		// Skip verification if already done
+		if (
+			(this.llm as any)._verifiedApiKeys === true ||
+			CONFIG.skipLlmApiKeyVerification
+		) {
+			(this.llm as any)._verifiedApiKeys = true;
+			return;
+		}
+
+		// Set verified flag
+		(this.llm as any)._verifiedApiKeys = true;
+	}
+
+	/**
+	 * Run the planner to generate a plan for the next step.
+	 *
+	 * @returns The plan as a string, or null if no planner is set
+	 */
+	private async _runPlanner(): Promise<string | null> {
 		// Skip planning if no planner_llm is set
 		if (!this.settings.plannerLLM) {
 			return null;
 		}
 
-		// Create planner message history using full message history
-		const allMessages = this._messageManager.getMessages();
+		// Get current state to filter actions by page
+		if (!this.browserSession) {
+			throw new Error("BrowserSession is not set up");
+		}
+
+		const page = await this.browserSession.getCurrentPage();
+
+		// Get all standard actions and page-specific actions
+		const standardActions = this.controller.registry.getPromptDescription(); // No page = system prompt actions
+		const pageActions = this.controller.registry.getPromptDescription(page); // Page-specific actions
+
+		// Combine both for the planner
+		let allActions = standardActions;
+		if (pageActions) {
+			allActions += "\n" + pageActions;
+		}
+
+		// Create planner message history using full message history with all available actions
 		const plannerMessages = [
-			new PlannerPrompt({
-				actionDescription: this.controller.registry.getPromptDescription(),
-				maxActionsPerStep: 10,
-			}).getSystemMessage(),
-			...allMessages.slice(1), // Use full message history except the first
+			new PlannerPrompt(allActions).getSystemMessage(
+				this.settings.isPlannerReasoning,
+				this.settings.extendPlannerSystemMessage,
+			),
+			...this._messageManager.getMessages().slice(1), // Use full message history except system
 		];
 
+		// Remove images from planner messages if vision is disabled
 		if (!this.settings.useVisionForPlanner && this.settings.useVision) {
-			const lastStateMessage: HumanMessage =
-				plannerMessages[plannerMessages.length - 1]!;
-			// remove image from last state message
-			let newMsg = "";
-
-			if (Array.isArray(lastStateMessage.content)) {
+			const lastStateMessage = plannerMessages[plannerMessages.length - 1];
+			if (lastStateMessage && Array.isArray(lastStateMessage.content)) {
+				let newMsg = "";
 				for (const msg of lastStateMessage.content) {
 					if (msg.type === "text") {
 						newMsg += msg.text;
 					}
-					// Skip image_url types
+					// Skip image_url content
 				}
-			} else {
-				newMsg = lastStateMessage.content;
+				plannerMessages[plannerMessages.length - 1] = {
+					...lastStateMessage,
+					content: newMsg,
+				};
 			}
-
-			plannerMessages[plannerMessages.length - 1] = new HumanMessage({
-				content: newMsg,
-			});
 		}
-
-		const convertedMessages = convertInputMessages(
-			plannerMessages,
-			this.plannerModelName,
-		);
 
 		// Get planner output
-		const response = await this.settings.plannerLLM.invoke(convertedMessages);
-		let plan = String(response.content);
-
-		// if deepseek-reasoner, remove think tags
-		if (
-			this.plannerModelName &&
-			(this.plannerModelName.includes("deepseek-r1") ||
-				this.plannerModelName.includes("deepseek-reasoner"))
-		) {
-			plan = this.removeThinkTags(plan);
-		}
-
 		try {
-			const planJson = JSON.parse(plan);
-			logger.info(`Planning Analysis:\n${JSON.stringify(planJson, null, 4)}`);
-		} catch (e) {
-			if (e instanceof SyntaxError) {
-				logger.info(`Planning Analysis:\n${plan}`);
-			} else {
-				logger.debug(`Error parsing planning analysis: ${e}`);
-				logger.info(`Plan: ${plan}`);
-			}
-		}
+			const response = await this.settings.plannerLLM.ainvoke(plannerMessages);
+			let plan = response.completion;
 
-		return plan;
+			// Remove think tags for DeepSeek reasoner models
+			if (
+				this.settings.plannerLLM.model.includes("deepseek-r1") ||
+				this.settings.plannerLLM.model.includes("deepseek-reasoner")
+			) {
+				plan = this._removeThinkTags(plan);
+			}
+
+			try {
+				const planJson = JSON.parse(plan);
+				this.logger.info(
+					`Planning Analysis:\n${JSON.stringify(planJson, null, 4)}`,
+				);
+			} catch (error) {
+				this.logger.info(`Planning Analysis:\n${plan}`);
+			}
+
+			return plan;
+		} catch (error) {
+			this.logger.error(`Failed to invoke planner: ${error}`);
+			const statusCode =
+				(error as any).statusCode || (error as any).code || 500;
+			const errorMsg = `Planner LLM API call failed: ${(error as Error).constructor.name}: ${error}`;
+			throw new LLMException(statusCode, errorMsg);
+		}
 	}
 
 	get messageManager(): MessageManager {
 		return this._messageManager;
 	}
 
-	async cleanupHttpxClients(): Promise<void> {
-		logger.debug("Cleanup HTTP clients completed");
-	}
-
+	/**
+	 * Close all resources
+	 */
 	async close(): Promise<void> {
 		try {
-			// First close browser resources
-			if (this.browserContext && !this.injectedBrowserContext) {
-				await this.browserContext.close();
+			if (this.browserSession) {
+				await this.browserSession.stop();
 			}
 
-			if (this.browser && !this.injectedBrowser) {
-				await this.browser.close();
+			// Force garbage collection if available
+			if (global.gc) {
+				global.gc();
 			}
-
-			// Then cleanup HTTP clients
-			await this.cleanupHttpxClients();
-		} catch (e) {
-			logger.error(`Error during cleanup: ${e}`);
+		} catch (error) {
+			this.logger.error(`Error during cleanup: ${error}`);
 		}
 	}
 
 	/**
-	 * Check if the LLM is a Gemini model
+	 * Update action models with page-specific actions
+	 *
+	 * @param page - The current page
 	 */
-	private isGeminiModel(): boolean {
-		// Check various properties that might indicate Gemini
-		const llmConfig = (this.llm as any).lc_kwargs || (this.llm as any);
-		const modelName = llmConfig.model || llmConfig.modelName || "";
-		const className = this.llm.constructor.name;
+	private async _updateActionModelsForPage(page: any): Promise<void> {
+		// Create new action model with current page's filtered actions
+		this.logger.info("---->_updateActionModelsForPage starting...");
+		this.ActionModel = this.controller.registry.createActionModel(null, page);
+		// this.logger.info(
+		// 	`---->_updateActionModelsForPage ActionModel: ${JSON.stringify(this.ActionModel, null, 2)}`,
+		// );
 
-		return (
-			modelName.toLowerCase().includes("gemini") ||
-			className.toLowerCase().includes("gemini") ||
-			className === "ChatGoogleGenerativeAI"
+		// Update output model with the new actions
+		if (this.settings.useThinking) {
+			this.AgentOutput = AgentOutput.typeWithCustomActions(this.ActionModel);
+		} else {
+			this.AgentOutput = AgentOutput.typeWithCustomActionsNoThinking(
+				this.ActionModel,
+			);
+		}
+
+		// Update done action model too
+		this.DoneActionModel = this.controller.registry.createActionModel(
+			["done"],
+			page,
 		);
-	}
-}
-
-// Helper function to check if one set is a subset of another
-function isSubset<T>(subset: Set<T>, superset: Set<T>): boolean {
-	for (const elem of subset) {
-		if (!superset.has(elem)) {
-			return false;
+		if (this.settings.useThinking) {
+			this.DoneAgentOutput = AgentOutput.typeWithCustomActions(
+				this.DoneActionModel,
+			);
+		} else {
+			this.DoneAgentOutput = AgentOutput.typeWithCustomActionsNoThinking(
+				this.DoneActionModel,
+			);
 		}
 	}
-	return true;
-}
 
-// Helper function to check if a function is async
-function isAsyncFunction(fn: Function): boolean {
-	return fn.constructor.name === "AsyncFunction";
+	// Private helper methods------------------------------------------------
+
+	private _handleModelSpecificSettings(): void {
+		// Handle DeepSeek models
+		if (this.llm.model.toLowerCase().includes("deepseek")) {
+			this.logger.warn(
+				"⚠️ DeepSeek models do not support useVision=true yet. Setting useVision=false for now...",
+			);
+			this.settings.useVision = false;
+		}
+		if (
+			this.settings.plannerLLM &&
+			this.settings.plannerLLM.model.toLowerCase().includes("deepseek")
+		) {
+			this.logger.warn(
+				"⚠️ DeepSeek models do not support useVision=true yet. Setting useVisionForPlanner=false for now...",
+			);
+			this.settings.useVisionForPlanner = false;
+		}
+
+		// Handle XAI models
+		if (this.llm.model.toLowerCase().includes("grok")) {
+			this.logger.warn(
+				"⚠️ XAI models do not support useVision=true yet. Setting useVision=false for now...",
+			);
+			this.settings.useVision = false;
+		}
+		if (
+			this.settings.plannerLLM &&
+			this.settings.plannerLLM.model.toLowerCase().includes("grok")
+		) {
+			this.logger.warn(
+				"⚠️ XAI models do not support useVision=true yet. Setting useVisionForPlanner=false for now...",
+			);
+			this.settings.useVisionForPlanner = false;
+		}
+	}
+
+	private _logAgentInitialization(): void {
+		this.logger.info(
+			`🧠 Starting a browsernode agent ${this.version} with base_model=${this.llm.model}` +
+				`${this.settings.useVision ? " +vision" : ""}` +
+				` extraction_model=${this.settings.pageExtractionLLM?.model || "Unknown"}` +
+				`${this.settings.plannerLLM ? ` planner_model=${this.settings.plannerLLM.model}` : ""}` +
+				`${this.settings.isPlannerReasoning ? " +reasoning" : ""}` +
+				`${this.settings.useVisionForPlanner ? " +vision" : ""} ` +
+				`${this.fileSystem ? " +file_system" : ""}`,
+		);
+	}
+
+	private _initializeBrowserSession(options: any): void {
+		if (options.browserSession instanceof BrowserSession) {
+			options.browserSession = options.browserSession || options.browser;
+		}
+
+		const browserContext = options.page?.context || options.browserContext;
+		const browserProfile = options.browserProfile; // || DEFAULT_BROWSER_PROFILE;
+
+		if (options.browserSession) {
+			// Always copy sessions to avoid agents overwriting each other
+			if ((options.browserSession as any)._ownsBrowserResources) {
+				this.browserSession = options.browserSession;
+			} else {
+				this.logger.warn(
+					"⚠️ Attempting to use multiple Agents with the same BrowserSession! This is not supported yet and will likely lead to strange behavior, use separate BrowserSessions for each Agent.",
+				);
+				this.browserSession = options.browserSession.modelCopy();
+			}
+		} else {
+			if (options.browser && typeof options.browser.close !== "function") {
+				throw new Error("Browser is not set up");
+			}
+
+			this.browserSession = new BrowserSession({
+				browserProfile,
+				browser: options.browser,
+				browserContext,
+				agentCurrentPage: options.page,
+				id: uuidv4().slice(-4) + this.id.slice(-4), // Use same 4-char suffix
+			});
+		}
+	}
+
+	private async _validateSensitiveDataSecurity(): Promise<void> {
+		if (!this.sensitiveData) {
+			return;
+		}
+
+		// Check if sensitive_data has domain-specific credentials
+		const hasDomainSpecificCredentials = Object.values(this.sensitiveData).some(
+			(v) => typeof v === "object" && v !== null,
+		);
+
+		// If no allowed_domains are configured, show security warning
+		if (!this.browserProfile.allowedDomains) {
+			this.logger.error(
+				"⚠️⚠️⚠️ Agent(sensitiveData=••••••••) was provided but BrowserSession(allowedDomains=[...]) is not locked down! ⚠️⚠️⚠️\n" +
+					"          ☠️ If the agent visits a malicious website and encounters a prompt-injection attack, your sensitiveData may be exposed!\n\n" +
+					"             https://docs.browsernode.com/customize/browser-settings#restrict-urls\n" +
+					"Waiting 10 seconds before continuing... Press [Ctrl+C] to abort.",
+			);
+
+			if (process.stdin.isTTY) {
+				try {
+					await this._waitWithKeyboardInterrupt(10000);
+				} catch (error) {
+					if (error instanceof Error && error.message === "KeyboardInterrupt") {
+						console.log(
+							'\n\n 🛑 Exiting now... set BrowserSession(allowedDomains=["example.com", "example.org"]) to only domains you trust to see your sensitiveData.',
+						);
+						process.exit(0);
+					}
+					throw error;
+				}
+			} else {
+				// no point waiting if we're not in an interactive shell
+			}
+			this.logger.warn(
+				"‼️ Continuing with insecure settings for now... but this will become a hard error in the future!",
+			);
+		} else if (hasDomainSpecificCredentials) {
+			// If we're using domain-specific credentials, validate domain patterns
+			// Validate domain patterns for domain-specific credentials
+			// For domain-specific format, ensure all domain patterns are included in allowed_domains
+			const domainPatterns = Object.keys(this.sensitiveData).filter(
+				(k) => typeof this.sensitiveData![k] === "object",
+			);
+
+			for (const domainPattern of domainPatterns) {
+				let isAllowed = false;
+				// Special cases that don't require URL matching
+				for (const allowedDomain of this.browserProfile.allowedDomains) {
+					if (domainPattern === allowedDomain || allowedDomain === "*") {
+						isAllowed = true;
+						break;
+					}
+
+					// Extract domain parts
+					// Need to create example URLs to compare the patterns
+					// Extract the domain parts, ignoring scheme
+					const patternDomain = domainPattern.includes("://")
+						? domainPattern.split("://")[1]
+						: domainPattern;
+					const allowedDomainPart = allowedDomain.includes("://")
+						? allowedDomain.split("://")[1]
+						: allowedDomain;
+
+					// Check if pattern is covered by allowed domain
+					// Example: "google.com" is covered by "*.google.com"
+					if (
+						patternDomain === allowedDomainPart ||
+						(allowedDomainPart?.startsWith("*.") &&
+							(patternDomain === allowedDomainPart.slice(2) ||
+								patternDomain?.endsWith("." + allowedDomainPart.slice(2))))
+					) {
+						isAllowed = true;
+						break;
+					}
+				}
+
+				if (!isAllowed) {
+					this.logger.warn(
+						`⚠️ Domain pattern "${domainPattern}" in sensitiveData is not covered by any pattern in allowedDomains=${this.browserProfile.allowedDomains}\n` +
+							`   This may be a security risk as credentials could be used on unintended domains.`,
+					);
+				}
+			}
+		}
+	}
+
+	// Utility methods
+
+	private isAsyncFunction(fn: any): boolean {
+		return fn && fn.constructor.name === "AsyncFunction";
+	}
+
+	private isSubset<T>(subset: Set<T>, superset: Set<T>): boolean {
+		for (const item of subset) {
+			if (!superset.has(item)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private async sleep(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	private async _waitWithKeyboardInterrupt(ms: number): Promise<void> {
+		return new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				process.removeListener("SIGINT", interruptHandler);
+				resolve();
+			}, ms);
+
+			const interruptHandler = () => {
+				clearTimeout(timeout);
+				process.removeListener("SIGINT", interruptHandler);
+				reject(new Error("KeyboardInterrupt"));
+			};
+
+			process.on("SIGINT", interruptHandler);
+		});
+	}
+
+	// Core agent methods
+
+	/**
+	 * Save file system state
+	 */
+	saveFileSystemState(): void {
+		if (this.fileSystem) {
+			this.state.fileSystemState = this.fileSystem.getState();
+		} else {
+			this.logger.error("💾 File system is not set up. Cannot save state.");
+			throw new Error("File system is not set up. Cannot save state.");
+		}
+	}
+
+	private _createAsyncEvent() {
+		let isSet = false;
+		let waiters: Array<() => void> = [];
+
+		return {
+			set: () => {
+				isSet = true;
+				waiters.forEach((resolve) => resolve());
+				waiters = [];
+			},
+			clear: () => {
+				isSet = false;
+			},
+			wait: async (): Promise<void> => {
+				if (isSet) {
+					return Promise.resolve();
+				}
+				return new Promise<void>((resolve) => {
+					waiters.push(resolve);
+				});
+			},
+		};
+	}
+
+	private async _raiseIfStoppedOrPaused(): Promise<void> {
+		if (this.registerExternalAgentStatusRaiseErrorCallback) {
+			if (await this.registerExternalAgentStatusRaiseErrorCallback()) {
+				throw new Error("Agent stopped or paused");
+			}
+		}
+
+		if (this.state.stopped || this.state.paused) {
+			throw new Error("Agent stopped or paused");
+		}
+	}
 }

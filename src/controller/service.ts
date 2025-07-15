@@ -1,60 +1,85 @@
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { PromptTemplate } from "@langchain/core/prompts";
 import { z } from "zod";
-import { BrowserContext } from "../browser/context";
+import { BrowserSession } from "../browser/session";
+import type { BaseChatModel } from "../llm/base";
 import { Registry } from "./registry/service";
 import {
 	ClickElementAction,
+	CloseTabAction,
 	DoneAction,
-	ExtractContentAction,
-	GetDropdownOptionsAction,
 	GoToUrlAction,
 	InputTextAction,
 	NoParamsAction,
-	OpenTabAction,
 	ScrollAction,
-	ScrollToTextAction,
 	SearchGoogleAction,
-	SelectDropdownOptionAction,
 	SendKeysAction,
+	StructuredOutputAction,
 	SwitchTabAction,
-	WaitAction,
+	UploadFileAction,
 } from "./views";
 
 import { ActionResult } from "../agent/views";
+import type { FileSystem } from "../filesystem/file_system";
 import bnLogger from "../logging_config";
-import { timeExecution } from "../utils";
+import { timeExecution } from "../utils_old";
 import type { ActionModel } from "./registry/views";
 
 // Setup logger
 const logger = bnLogger.child({
-	name: "browser_node/controller/service",
+	label: "browsernode/controller/service",
 });
+
+// Helper function to retry async operations
+async function retryAsyncFunction<T>(
+	func: () => Promise<T>,
+	errorMessage: string,
+	retries: number = 3,
+	sleepSeconds: number = 1,
+): Promise<[T | null, ActionResult | null]> {
+	for (let attempt = 0; attempt < retries; attempt++) {
+		try {
+			const result = await func();
+			return [result, null];
+		} catch (e: any) {
+			await new Promise((resolve) => setTimeout(resolve, sleepSeconds * 1000));
+			logger.debug(`Error (attempt ${attempt + 1}/${retries}): ${e}`);
+			if (attempt === retries - 1) {
+				return [null, new ActionResult({ error: errorMessage + e.toString() })];
+			}
+		}
+	}
+	return [null, new ActionResult({ error: errorMessage })];
+}
 
 // Generic type for Context
 type Context = any;
 
 export class Controller<T = Context> {
 	public registry: Registry<T>;
+	public displayFilesInDoneText: boolean;
 
 	constructor(
 		public excludeActions: string[] = [],
 		public outputModel: any = null,
+		displayFilesInDoneText: boolean = true,
 	) {
 		// Initialize registry
 		this.registry = new Registry<T>(excludeActions);
+		this.displayFilesInDoneText = displayFilesInDoneText;
+
 		// Register all default browser actions
+		this.registerDoneAction(outputModel);
+		this.registerDefaultActions();
+	}
+
+	/*
+	 * Custom done action for structured output
+	 */
+	private registerDoneAction(outputModel: any) {
 		if (outputModel !== null) {
-			const CustomizedOutputModelAction = z.object({
-				data: outputModel,
-				success: z.boolean(),
-			});
 			this.registry.action(
 				"Complete task - with return text and if the task is finished (success=True) or not yet completely finished (success=False), because last step is reached",
-				{ paramModel: CustomizedOutputModelAction },
-			)(async function done(
-				params: z.infer<typeof CustomizedOutputModelAction>,
-			) {
+				StructuredOutputAction,
+			)(async function done(params: z.infer<typeof StructuredOutputAction>) {
 				return new ActionResult({
 					isDone: true,
 					success: params.success,
@@ -62,173 +87,325 @@ export class Controller<T = Context> {
 				});
 			});
 		} else {
-			// console.debug(
-			// 	"No output model specified, using default DoneAction model",
-			// );
 			// If no output model is specified, use the default DoneAction model
 			this.registry.action(
-				"Complete task - with return text and if the task is finished (success=True) or not yet completely finished (success=False), because last step is reached",
-				{ paramModel: DoneAction },
-			)(async function done(params: z.infer<typeof DoneAction>) {
-				return new ActionResult({
-					isDone: true,
-					success: params.success,
-					extractedContent: params.text,
-				});
-			});
-		}
+				"Complete task - provide a summary of results for the user. Set success=True if task completed successfully, false otherwise. Text should be your response to the user summarizing results. Include files you would like to display to the user in filesToDisplay.",
+				DoneAction,
+			)(
+				async (
+					params: z.infer<typeof DoneAction>,
+					browserSession: BrowserSession,
+					pageExtractionLlm?: BaseChatModel,
+					fileSystem?: FileSystem,
+				) => {
+					let userMessage = params.text;
 
+					const lenText = params.text.length;
+					const lenMaxMemory = 100;
+					let memory = `Task completed: ${params.success} - ${params.text.substring(0, lenMaxMemory)}`;
+					if (lenText > lenMaxMemory) {
+						memory += ` - ${lenText - lenMaxMemory} more characters`;
+					}
+
+					const attachments: string[] = [];
+					if (params.filesToDisplay && fileSystem) {
+						if (this.displayFilesInDoneText) {
+							let fileMsg = "";
+							for (const fileName of params.filesToDisplay) {
+								if (fileName === "todo.md") continue;
+								const fileContent = await fileSystem.displayFile(fileName);
+								if (fileContent) {
+									fileMsg += `\n\n${fileName}:\n${fileContent}`;
+									attachments.push(fileName);
+								}
+							}
+							if (fileMsg) {
+								userMessage += "\n\nAttachments:";
+								userMessage += fileMsg;
+							} else {
+								logger.warn(
+									"Agent wanted to display files but none were found",
+								);
+							}
+						} else {
+							for (const fileName of params.filesToDisplay) {
+								if (fileName === "todo.md") continue;
+								const fileContent = await fileSystem.displayFile(fileName);
+								if (fileContent) {
+									attachments.push(fileName);
+								}
+							}
+						}
+					}
+
+					return new ActionResult({
+						isDone: true,
+						success: params.success,
+						extractedContent: userMessage,
+						longTermMemory: memory,
+					});
+				},
+			);
+		}
+	}
+
+	private registerDefaultActions() {
 		// Basic Navigation Actions
 		this.registry.action(
-			"Search the query in Google in the current tab, the query should be a search query like humans search in Google, concrete and not vague or super long. More the single most important items.",
-			{ paramModel: SearchGoogleAction },
+			"Search the query in Google, the query should be a search query like humans search in Google, concrete and not vague or super long.",
+			SearchGoogleAction,
 		)(async function searchGoogle(
 			params: z.infer<typeof SearchGoogleAction>,
-			browser: BrowserContext,
+			browserSession: BrowserSession,
 		) {
-			const page = await browser.getCurrentPage();
-			await page.goto(`https://www.google.com/search?q=${params.query}&udm=14`);
-			// await page.goto(`https://search.brave.com/search?q=${params.query}&source=web`,);
-			await page.waitForLoadState();
-			const msg = `🔍 Searched for "${params.query}" in Google`;
-			logger.info(msg);
-			return new ActionResult({ extractedContent: msg, includeInMemory: true });
-		});
+			const searchUrl = `https://www.google.com/search?q=${params.query}&udm=14`;
 
-		this.registry.action("Navigate to URL in the current tab", {
-			paramModel: GoToUrlAction,
-		})(async function goToUrl(
-			params: z.infer<typeof GoToUrlAction>,
-			browser: BrowserContext,
-		) {
-			if (!browser) {
-				throw new Error("Browser context is required but was not provided");
+			const page = await browserSession.getCurrentPage();
+			if (page.url().trim().replace(/\/$/, "") === "https://www.google.com") {
+				await browserSession.navigateTo(searchUrl);
+			} else {
+				await browserSession.createNewTab(searchUrl);
 			}
 
-			const page = await browser.getCurrentPage();
-			await page.goto(params.url);
-			await page.waitForLoadState();
-			const msg = `🔗 Navigated to ${params.url}`;
+			const msg = `🔍 Searched for "${params.query}" in Google`;
 			logger.info(msg);
-			return new ActionResult({ extractedContent: msg, includeInMemory: true });
-		});
-
-		this.registry.action("Go back", { paramModel: NoParamsAction })(
-			async function goBack(
-				_: z.infer<typeof NoParamsAction>,
-				browser: BrowserContext,
-			) {
-				if (!browser) {
-					throw new Error("Browser context is required but was not provided");
-				}
-				await browser.goBack();
-				const msg = "🔙 Navigated back";
-				logger.info(msg);
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
-			},
-		);
-
-		// Wait for x seconds
-		this.registry.action("Wait for x seconds default 3", {
-			paramModel: WaitAction,
-		})(async function wait(params: z.infer<typeof WaitAction>) {
-			const msg = `🕒 Waiting for ${params.seconds} seconds`;
-			logger.info(msg);
-			await new Promise((resolve) =>
-				setTimeout(resolve, params.seconds * 1000),
-			);
 			return new ActionResult({
 				extractedContent: msg,
 				includeInMemory: true,
+				longTermMemory: `Searched Google for '${params.query}'`,
+			});
+		});
+
+		this.registry.action(
+			"Navigate to URL, set newTab=true to open in new tab, false to navigate in current tab",
+			GoToUrlAction,
+		)(async function goToUrl(
+			params: z.infer<typeof GoToUrlAction>,
+			browserSession: BrowserSession,
+		) {
+			try {
+				if (params.newTab) {
+					// Open in new tab
+					const page = await browserSession.createNewTab(params.url);
+					const tabIdx = browserSession.tabs.indexOf(page);
+					const memory = `Opened new tab with URL ${params.url}`;
+					const msg = `🔗 Opened new tab #${tabIdx} with url ${params.url}`;
+					logger.info(msg);
+					return new ActionResult({
+						extractedContent: msg,
+						includeInMemory: true,
+						longTermMemory: memory,
+					});
+				} else {
+					// Navigate in current tab
+					await browserSession.navigateTo(params.url);
+					const memory = `Navigated to ${params.url}`;
+					const msg = `🔗 ${memory}`;
+					logger.info(msg);
+					return new ActionResult({
+						extractedContent: msg,
+						includeInMemory: true,
+						longTermMemory: memory,
+					});
+				}
+			} catch (e: any) {
+				const errorMsg = e.toString();
+				// Check for network-related errors
+				const networkErrors = [
+					"ERR_NAME_NOT_RESOLVED",
+					"ERR_INTERNET_DISCONNECTED",
+					"ERR_CONNECTION_REFUSED",
+					"ERR_TIMED_OUT",
+					"net::",
+				];
+
+				if (networkErrors.some((err) => errorMsg.includes(err))) {
+					const siteUnavailableMsg = `Site unavailable: ${params.url} - ${errorMsg}`;
+					logger.warn(siteUnavailableMsg);
+					return new ActionResult({
+						success: false,
+						error: siteUnavailableMsg,
+						includeInMemory: true,
+						longTermMemory: siteUnavailableMsg,
+					});
+				} else {
+					// Re-raise non-network errors
+					throw e;
+				}
+			}
+		});
+
+		this.registry.action(
+			"Go back",
+			NoParamsAction,
+		)(async function goBack(
+			_: z.infer<typeof NoParamsAction>,
+			browserSession: BrowserSession,
+		) {
+			await browserSession.goBack();
+			const msg = "🔙 Navigated back";
+			logger.info(msg);
+			return new ActionResult({
+				extractedContent: msg,
+				includeInMemory: true,
+				longTermMemory: "Navigated back",
+			});
+		});
+
+		// Wait for x seconds
+		this.registry.action("Wait for x seconds default 3")(async function wait(
+			seconds: number = 3,
+		) {
+			const msg = `🕒 Waiting for ${seconds} seconds`;
+			logger.info(msg);
+			await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+			return new ActionResult({
+				extractedContent: msg,
+				includeInMemory: true,
+				longTermMemory: `Waited for ${seconds} seconds`,
 			});
 		});
 
 		// Element Interaction Actions
-		this.registry.action("Click element", {
-			paramModel: ClickElementAction,
-		})(async function clickElement(
+		this.registry.action(
+			"Click element by index",
+			ClickElementAction,
+		)(async function clickElementByIndex(
 			params: z.infer<typeof ClickElementAction>,
-			browser: BrowserContext,
+			browserSession: BrowserSession,
 		) {
-			const session = await browser.getSession();
-
-			if (
-				!Object.keys(await browser.getSelectorMap()).includes(
-					params.index.toString(),
-				)
-			) {
-				throw new Error(
-					`Element with index ${params.index} does not exist - retry or use alternative actions`,
+			// Check if element exists in current selector map
+			let selectorMap = await browserSession.getSelectorMap();
+			if (!Object.keys(selectorMap).includes(params.index.toString())) {
+				// Force a state refresh in case the cache is stale
+				logger.info(
+					`Element with index ${params.index} not found in selector map, refreshing state...`,
 				);
+				await browserSession.getStateSummary(true); // This will refresh the cached state
+				selectorMap = await browserSession.getSelectorMap();
+
+				if (!Object.keys(selectorMap).includes(params.index.toString())) {
+					// Return informative message with the new state instead of error
+					const maxIndex = Math.max(
+						...Object.keys(selectorMap).map(Number),
+						-1,
+					);
+					const msg = `Element with index ${params.index} does not exist. Page has ${Object.keys(selectorMap).length} interactive elements (indices 0-${maxIndex}). State has been refreshed - please use the updated element indices or scroll to see more elements`;
+					return new ActionResult({
+						extractedContent: msg,
+						includeInMemory: true,
+						success: false,
+						longTermMemory: msg,
+					});
+				}
 			}
 
-			const elementNode = await browser.getDomElementByIndex(params.index);
-			const initialPages = session.context.pages.length;
+			const elementNode = await browserSession.getDomElementByIndex(
+				params.index,
+			);
+			const initialPages = browserSession.tabs.length;
 
 			// Check if element has file uploader
-			if (await browser.isFileUploader(elementNode)) {
+			if (elementNode && BrowserSession.isFileInput(elementNode)) {
 				const msg = `Index ${params.index} - has an element which opens file upload dialog. To upload files please use a specific function to upload files`;
 				logger.info(msg);
 				return new ActionResult({
 					extractedContent: msg,
 					includeInMemory: true,
+					success: false,
+					longTermMemory: msg,
 				});
 			}
 
-			let msg: string | null = null;
-
 			try {
-				const downloadPath = await browser.clickElementNode(elementNode);
-				if (downloadPath) {
-					msg = `💾 Downloaded file to ${downloadPath}`;
-				} else {
-					msg = `🖱️ Clicked button with index ${params.index}: ${elementNode.getAllTextTillNextClickableElement(2)}`;
+				if (!elementNode) {
+					throw new Error(`Element with index ${params.index} does not exist`);
 				}
 
-				logger.info(msg);
+				const downloadPath =
+					await browserSession._clickElementNode(elementNode);
+				let msg: string;
+				let emoji: string;
+
+				if (downloadPath) {
+					emoji = "💾";
+					msg = `Downloaded file to ${downloadPath}`;
+				} else {
+					emoji = "🖱️";
+					msg = `Clicked button with index ${params.index}: ${elementNode.getAllTextTillNextClickableElement(2)}`;
+				}
+
+				logger.info(`${emoji} ${msg}`);
 				logger.debug(`Element xpath: ${elementNode.xpath}`);
 
-				if (session.context.pages.length > initialPages) {
+				if (browserSession.tabs.length > initialPages) {
 					const newTabMsg = "New tab opened - switching to it";
 					msg += ` - ${newTabMsg}`;
-					logger.info(newTabMsg);
-					await browser.switchToTab(-1);
+					emoji = "🔗";
+					logger.info(`${emoji} ${newTabMsg}`);
+					await browserSession.switchToTab(-1);
 				}
 
 				return new ActionResult({
-					extractedContent: msg || undefined,
+					extractedContent: msg,
 					includeInMemory: true,
+					longTermMemory: msg,
 				});
 			} catch (e: any) {
-				logger.warn(
-					`Element not clickable with index ${params.index} - most likely the page changed`,
-				);
-				return new ActionResult({ error: e.toString() });
+				const errorMsg = e.toString();
+				if (
+					errorMsg.includes("Execution context was destroyed") ||
+					errorMsg.includes("Cannot find context with specified id")
+				) {
+					// Page navigated during click - refresh state and return it
+					logger.info("Page context changed during click, refreshing state...");
+					await browserSession.getStateSummary(true);
+					return new ActionResult({
+						error: "Page navigated during click. Refreshed state provided.",
+						includeInMemory: true,
+						success: false,
+					});
+				} else {
+					logger.warn(
+						`Element not clickable with index ${params.index} - most likely the page changed`,
+					);
+					return new ActionResult({ error: errorMsg, success: false });
+				}
 			}
 		});
 
-		this.registry.action("Input text into a input interactive element", {
-			paramModel: InputTextAction,
-		})(async function inputText(
+		this.registry.action(
+			"Click and input text into a input interactive element",
+			InputTextAction,
+		)(async function inputText(
 			params: z.infer<typeof InputTextAction>,
-			browser: BrowserContext,
+			browserSession: BrowserSession,
+			pageExtractionLlm?: BaseChatModel,
+			fileSystem?: FileSystem,
+			sensitiveData?: Record<string, string>,
+			availableFilePaths?: string[],
 			hasSensitiveData: boolean = false,
 		) {
-			if (
-				!Object.keys(await browser.getSelectorMap()).includes(
-					params.index.toString(),
-				)
-			) {
+			const selectorMap = await browserSession.getSelectorMap();
+			if (!Object.keys(selectorMap).includes(params.index.toString())) {
 				throw new Error(
 					`Element index ${params.index} does not exist - retry or use alternative actions`,
 				);
 			}
 
-			const elementNode = await browser.getDomElementByIndex(params.index);
-			await browser.inputTextElementNode(elementNode, params.text);
+			const elementNode = await browserSession.getDomElementByIndex(
+				params.index,
+			);
+			if (!elementNode) {
+				throw new Error(`Element with index ${params.index} does not exist`);
+			}
+
+			try {
+				await browserSession._inputTextElementNode(elementNode, params.text);
+			} catch (error) {
+				const msg = `Failed to input text into element ${params.index}.`;
+				return new ActionResult({ error: msg });
+			}
 
 			const msg = !hasSensitiveData
 				? `⌨️ Input ${params.text} into index ${params.index}`
@@ -239,187 +416,158 @@ export class Controller<T = Context> {
 			return new ActionResult({
 				extractedContent: msg,
 				includeInMemory: true,
+				longTermMemory: `Input '${params.text}' into element ${params.index}.`,
 			});
 		});
 
-		// Save PDF
-		this.registry.action("Save the current page as a PDF file", {
-			paramModel: NoParamsAction,
-		})(async function savePdf(
-			_: z.infer<typeof NoParamsAction>,
-			browser: BrowserContext,
+		this.registry.action(
+			"Upload file to interactive element with file path",
+			UploadFileAction,
+		)(async function uploadFile(
+			params: z.infer<typeof UploadFileAction>,
+			browserSession: BrowserSession,
+			pageExtractionLlm?: BaseChatModel,
+			fileSystem?: FileSystem,
+			sensitiveData?: Record<string, string>,
+			availableFilePaths?: string[],
 		) {
-			const page = await browser.getCurrentPage();
-			const shortUrl = page.url().replace(/^https?:\/\/(?:www\.)?|\/$/g, "");
-			const slug = shortUrl
-				.replace(/[^a-zA-Z0-9]+/g, "-")
-				.replace(/^-|-$/g, "")
-				.toLowerCase();
-			const sanitizedFilename = `${slug}.pdf`;
+			if (!availableFilePaths || !availableFilePaths.includes(params.path)) {
+				return new ActionResult({
+					error: `File path ${params.path} is not available`,
+				});
+			}
 
-			await page.emulateMedia({
-				media: "screen",
-			});
-			await page.pdf({
-				path: sanitizedFilename,
-				format: "A4",
-				printBackground: false,
-			});
-			const msg = `Saving page with URL ${page.url()} as PDF to ./${sanitizedFilename}`;
-			logger.info(msg);
-			return new ActionResult({
-				extractedContent: msg,
-				includeInMemory: true,
-			});
+			// Check if file exists (simplified check)
+			try {
+				// This is a simplified existence check - in a real implementation
+				// you'd use fs.promises.access or similar
+				const fileUploadDomEl =
+					await browserSession.findFileUploadElementByIndex(params.index, 3, 3);
+
+				if (!fileUploadDomEl) {
+					const msg = `No file upload element found at index ${params.index}`;
+					logger.info(msg);
+					return new ActionResult({ error: msg });
+				}
+
+				const fileUploadEl =
+					await browserSession.getLocateElement(fileUploadDomEl);
+				if (!fileUploadEl) {
+					const msg = `No file upload element found at index ${params.index}`;
+					logger.info(msg);
+					return new ActionResult({ error: msg });
+				}
+
+				await fileUploadEl.setInputFiles(params.path);
+				const msg = `📁 Successfully uploaded file to index ${params.index}`;
+				logger.info(msg);
+				return new ActionResult({
+					extractedContent: msg,
+					includeInMemory: true,
+					longTermMemory: `Uploaded file ${params.path} to element ${params.index}`,
+				});
+			} catch (e: any) {
+				const msg = `Failed to upload file to index ${params.index}: ${e.toString()}`;
+				logger.info(msg);
+				return new ActionResult({ error: msg });
+			}
 		});
 
 		// Tab Management Actions
-		this.registry.action("Switch tab", { paramModel: SwitchTabAction })(
-			async function switchTab(
-				params: z.infer<typeof SwitchTabAction>,
-				browser: BrowserContext,
-			) {
-				await browser.switchToTab(params.pageId);
-				// Wait for tab to be ready
-				const page = await browser.getCurrentPage();
-				await page.waitForLoadState();
-				const msg = `🔄 Switched to tab ${params.pageId}`;
-				logger.info(msg);
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
-			},
-		);
-
-		this.registry.action("Open url in new tab", {
-			paramModel: OpenTabAction,
-		})(async function openTab(
-			params: z.infer<typeof OpenTabAction>,
-			browser: BrowserContext,
+		this.registry.action(
+			"Switch tab",
+			SwitchTabAction,
+		)(async function switchTab(
+			params: z.infer<typeof SwitchTabAction>,
+			browserSession: BrowserSession,
 		) {
-			if (!browser) {
-				throw new Error("Browser context is required but was not provided");
+			await browserSession.switchToTab(params.pageId);
+			const page = await browserSession.getCurrentPage();
+			try {
+				await page.waitForLoadState("domcontentloaded", { timeout: 5000 });
+			} catch (e) {
+				// Ignore timeout errors
 			}
-			await browser.createNewTab(params.url);
-			const msg = `🔗 Opened new tab with ${params.url}`;
+			const msg = `🔄 Switched to tab #${params.pageId} with url ${page.url()}`;
 			logger.info(msg);
 			return new ActionResult({
 				extractedContent: msg,
 				includeInMemory: true,
+				longTermMemory: `Switched to tab ${params.pageId}`,
 			});
 		});
 
-		// Content Actions
 		this.registry.action(
-			"Extract page content to retrieve specific information from the page, e.g. all company names, a specifc description, all information about, links with companies in structured format or simply links",
-			{ paramModel: ExtractContentAction },
-		)(async function extractContent(
-			params: z.infer<typeof ExtractContentAction>,
-			browser: BrowserContext,
-			pageExtractionLlm: BaseChatModel,
+			"Close an existing tab",
+			CloseTabAction,
+		)(async function closeTab(
+			params: z.infer<typeof CloseTabAction>,
+			browserSession: BrowserSession,
 		) {
-			const page = await browser.getCurrentPage();
-			// Note: You'll need to install markdownify or use an equivalent TS library
-			// For now, we'll assume markdownify functionality is available
-			const content = await page.content(); // Use content as-is or implement markdownify equivalent
-
-			const prompt =
-				"Your task is to extract the content of the page. You will be given a page and a goal and you should extract all relevant information around this goal from the page. If the goal is vague, summarize the page. Respond in json format. Extraction goal: {goal}, Page: {page}";
-			const template = new PromptTemplate({
-				inputVariables: ["goal", "page"],
-				template: prompt,
+			await browserSession.switchToTab(params.pageId);
+			const page = await browserSession.getCurrentPage();
+			const url = page.url();
+			await page.close();
+			const newPage = await browserSession.getCurrentPage();
+			const newPageIdx = browserSession.tabs.indexOf(newPage);
+			const msg = `❌ Closed tab #${params.pageId} with ${url}, now focused on tab #${newPageIdx} with url ${newPage.url()}`;
+			logger.info(msg);
+			return new ActionResult({
+				extractedContent: msg,
+				includeInMemory: true,
+				longTermMemory: `Closed tab ${params.pageId} with url ${url}, now focused on tab ${newPageIdx} with url ${newPage.url()}.`,
 			});
+		});
+
+		// Scroll Actions
+		this.registry.action(
+			"Scroll the page by one page (set down=true to scroll down, down=false to scroll up)",
+			ScrollAction,
+		)(async function scroll(
+			params: z.infer<typeof ScrollAction>,
+			browserSession: BrowserSession,
+		) {
+			const page = await browserSession.getCurrentPage();
+
+			// Get window height with retries
+			const [dyResult, actionResult] = await retryAsyncFunction(
+				() => (page as any).evaluate("() => window.innerHeight"),
+				"Scroll failed due to an error.",
+			);
+			if (actionResult) {
+				return actionResult;
+			}
+
+			// Set direction based on down parameter
+			const dy = params.down ? dyResult || 0 : -(dyResult || 0);
 
 			try {
-				const output = await pageExtractionLlm.invoke(
-					await template.format({ goal: params.goal, page: content }),
-				);
-				const msg = `📄 Extracted from page\n: ${output.content}\n`;
-				logger.info(msg);
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
+				await browserSession._scrollContainer(dy as number);
 			} catch (e: any) {
-				logger.debug(`Error extracting content: ${e}`);
-				const msg = `📄 Extracted from page\n: ${content}\n`;
-				// logger.info(msg);
-				return new ActionResult({ extractedContent: msg });
-			}
-		});
-
-		this.registry.action(
-			"Scroll down the page by pixel amount - if no amount is specified, scroll down one page",
-			{ paramModel: ScrollAction },
-		)(async function scrollDown(
-			params: z.infer<typeof ScrollAction>,
-			browser: BrowserContext,
-		) {
-			if (!browser) {
-				throw new Error("Browser context is required but was not provided");
-			}
-			const page = await browser.getCurrentPage();
-			if (params.amount !== null && params.amount !== undefined) {
-				await page.evaluate(`window.scrollBy(0, ${params.amount});`);
-			} else {
-				await page.evaluate("window.scrollBy(0, window.innerHeight);");
+				// Hard fallback: always works on root scroller
+				await (page as any).evaluate("(y) => window.scrollBy(0, y)", dy);
+				logger.debug("Smart scroll failed; used window.scrollBy fallback", e);
 			}
 
-			const amount =
-				params.amount !== null && params.amount !== undefined
-					? `${params.amount} pixels`
-					: "one page";
-			const msg = `🔍 Scrolled down the page by ${amount}`;
+			const direction = params.down ? "down" : "up";
+			const msg = `🔍 Scrolled ${direction} the page by one page`;
 			logger.info(msg);
 			return new ActionResult({
 				extractedContent: msg,
 				includeInMemory: true,
+				longTermMemory: `Scrolled ${direction} the page by one page`,
 			});
 		});
 
-		// scroll up
+		// Send Keys Actions
 		this.registry.action(
-			"Scroll up the page by pixel amount - if no amount is specified, scroll up one page",
-			{ paramModel: ScrollAction },
-		)(async function scrollUp(
-			params: z.infer<typeof ScrollAction>,
-			browser: BrowserContext,
-		) {
-			if (!browser) {
-				throw new Error("Browser context is required but was not provided");
-			}
-			const page = await browser.getCurrentPage();
-			if (params.amount !== null && params.amount !== undefined) {
-				await page.evaluate(`window.scrollBy(0, -${params.amount});`);
-			} else {
-				await page.evaluate("window.scrollBy(0, -window.innerHeight);");
-			}
-
-			const amount =
-				params.amount !== null && params.amount !== undefined
-					? `${params.amount} pixels`
-					: "one page";
-			const msg = `🔍 Scrolled up the page by ${amount}`;
-			logger.info(msg);
-			return new ActionResult({
-				extractedContent: msg,
-				includeInMemory: true,
-			});
-		});
-
-		// send keys
-		this.registry.action(
-			"Send strings of special keys like Escape,Backspace, Insert, PageDown, Delete, Enter, Shortcuts such as `Control+o`, `Control+Shift+T` are supported as well. This gets used in keyboard.press.",
-			{ paramModel: SendKeysAction },
+			"Send strings of special keys to use Playwright page.keyboard.press - examples include Escape, Backspace, Insert, PageDown, Delete, Enter, or Shortcuts such as `Control+o`, `Control+Shift+T`",
+			SendKeysAction,
 		)(async function sendKeys(
 			params: z.infer<typeof SendKeysAction>,
-			browser: BrowserContext,
+			browserSession: BrowserSession,
 		) {
-			if (!browser) {
-				throw new Error("Browser context is required but was not provided");
-			}
-			const page = await browser.getCurrentPage();
+			const page = await browserSession.getCurrentPage();
 
 			try {
 				await page.keyboard.press(params.keys);
@@ -443,309 +591,42 @@ export class Controller<T = Context> {
 			return new ActionResult({
 				extractedContent: msg,
 				includeInMemory: true,
+				longTermMemory: `Sent keys: ${params.keys}`,
 			});
 		});
-
-		this.registry.action(
-			"If you dont find something which you want to interact with, scroll to it",
-			{ paramModel: ScrollToTextAction },
-		)(async function scrollToText(
-			params: z.infer<typeof ScrollToTextAction>,
-			browser: BrowserContext,
-		) {
-			if (!browser) {
-				throw new Error("Browser context is required but was not provided");
-			}
-			const page = await browser.getCurrentPage();
-			try {
-				// Try different locator strategies
-				const locators = [
-					page.getByText(params.text, { exact: false }),
-					page.locator(`text=${params.text}`),
-					page.locator(`//*[contains(text(), '${params.text}')]`),
-				];
-
-				for (const locator of locators) {
-					try {
-						// First check if element exists and is visible
-						if (
-							(await locator.count()) > 0 &&
-							(await locator.first().isVisible())
-						) {
-							await locator.first().scrollIntoViewIfNeeded();
-							await new Promise((resolve) => setTimeout(resolve, 500)); // Wait for scroll to complete
-							const msg = `🔍 Scrolled to text: ${params.text}`;
-							logger.info(msg);
-							return new ActionResult({
-								extractedContent: msg,
-								includeInMemory: true,
-							});
-						}
-					} catch (e) {
-						logger.debug(`Locator attempt failed: ${e}`);
-						continue;
-					}
-				}
-
-				const msg = `Text '${params.text}' not found or not visible on page`;
-				logger.info(msg);
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
-			} catch (e: any) {
-				const msg = `Failed to scroll to text '${params.text}': ${e.message}`;
-				logger.error(msg);
-				return new ActionResult({
-					error: msg,
-					includeInMemory: true,
-				});
-			}
-		});
-
-		this.registry.action("Get all options from a native dropdown", {
-			paramModel: GetDropdownOptionsAction,
-		})(async function getDropdownOptions(
-			params: z.infer<typeof GetDropdownOptionsAction>,
-			browser: BrowserContext,
-		): Promise<ActionResult> {
-			const page = await browser.getCurrentPage();
-			const selectorMap = await browser.getSelectorMap();
-			const domElement = selectorMap[params.index]!;
-
-			try {
-				// Frame-aware approach since we know it works
-				const allOptions: string[] = [];
-				let frameIndex = 0;
-
-				for (const frame of page.frames()) {
-					try {
-						const options = (await frame.evaluate(
-							`
-							(xpath) => {
-								const select = document.evaluate(xpath, document, null,
-									XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-								if (!select) return null;
-
-								return {
-									options: Array.from(select.options).map(opt => ({
-										text: opt.text, //do not trim, because we are doing exact match in select_dropdown_option
-										value: opt.value,
-										index: opt.index
-									})),
-									id: select.id,
-									name: select.name
-								};
-							}
-						`,
-							domElement.xpath,
-						)) as {
-							options: Array<{ text: string; value: string; index: number }>;
-							id?: string;
-							name?: string;
-						} | null;
-
-						if (options) {
-							logger.debug(`Found dropdown in frame ${frameIndex}`);
-							logger.debug(
-								`Dropdown ID: ${options["id"]}, Name: ${options["name"]}`,
-							);
-
-							const formattedOptions: string[] = [];
-							for (const opt of options.options) {
-								// encoding ensures AI uses the exact string in select_dropdown_option
-								const encodedText = JSON.stringify(opt.text);
-								formattedOptions.push(`${opt.index}: text=${encodedText}`);
-							}
-
-							allOptions.push(...formattedOptions);
-						}
-					} catch (frameE: any) {
-						logger.debug(
-							`Frame ${frameIndex} evaluation failed: ${frameE.message}`,
-						);
-					}
-
-					frameIndex++;
-				}
-
-				if (allOptions.length > 0) {
-					let msg = allOptions.join("\n");
-					msg += "\nUse the exact text string in select_dropdown_option";
-					logger.info(msg);
-					return new ActionResult({
-						extractedContent: msg,
-						includeInMemory: true,
-					});
-				} else {
-					const msg = "No options found in any frame for dropdown";
-					logger.info(msg);
-					return new ActionResult({
-						extractedContent: msg,
-						includeInMemory: true,
-					});
-				}
-			} catch (e: any) {
-				logger.error(`Failed to get dropdown options: ${e.message}`);
-				const msg = `Error getting options: ${e.message}`;
-				logger.info(msg);
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
-			}
-		});
-
-		this.registry.action(
-			"Select dropdown option for interactive element index by the text of the option you want to select",
-			{ paramModel: SelectDropdownOptionAction },
-		)(async function selectDropdownOption(
-			params: z.infer<typeof SelectDropdownOptionAction>,
-			browser: BrowserContext,
-		): Promise<ActionResult> {
-			const page = await browser.getCurrentPage();
-			const selectorMap = await browser.getSelectorMap();
-			const domElement = selectorMap[params.index]!;
-
-			// Validate that we're working with a select element
-			if (domElement.tagName !== "select") {
-				logger.error(
-					`Element is not a select! Tag: ${domElement.tagName}, Attributes: ${JSON.stringify(domElement.attributes)}`,
-				);
-				const msg = `Cannot select option: Element with index ${params.index} is a ${domElement.tagName}, not a select`;
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
-			}
-
-			logger.debug(
-				`Attempting to select '${params.text}' using xpath: ${domElement.xpath}`,
-			);
-			logger.debug(
-				`Element attributes: ${JSON.stringify(domElement.attributes)}`,
-			);
-			logger.debug(`Element tag: ${domElement.tagName}`);
-
-			const xpath = "//" + domElement.xpath;
-
-			try {
-				let frameIndex = 0;
-				for (const frame of page.frames()) {
-					try {
-						logger.debug(`Trying frame ${frameIndex} URL: ${frame.url()}`);
-
-						// First verify we can find the dropdown in this frame
-						const findDropdownJs = `
-							(xpath) => {
-								try {
-									const select = document.evaluate(xpath, document, null,
-										XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-									if (!select) return null;
-									if (select.tagName.toLowerCase() !== 'select') {
-										return {
-											error: \`Found element but it's a \${select.tagName}, not a SELECT\`,
-											found: false
-										};
-									}
-									return {
-										id: select.id,
-										name: select.name,
-										found: true,
-										tagName: select.tagName,
-										optionCount: select.options.length,
-										currentValue: select.value,
-										availableOptions: Array.from(select.options).map(o => o.text.trim())
-									};
-								} catch (e) {
-									return {error: e.toString(), found: false};
-								}
-							}
-						`;
-
-						const dropdownInfo = (await frame.evaluate(
-							findDropdownJs,
-							domElement.xpath,
-						)) as {
-							id?: string;
-							name?: string;
-							found: boolean;
-							error?: string;
-							tagName?: string;
-							optionCount?: number;
-							currentValue?: string;
-							availableOptions?: string[];
-						} | null;
-
-						if (dropdownInfo) {
-							if (!dropdownInfo.found) {
-								logger.error(
-									`Frame ${frameIndex} error: ${dropdownInfo.error}`,
-								);
-								continue;
-							}
-
-							logger.debug(
-								`Found dropdown in frame ${frameIndex}: ${JSON.stringify(dropdownInfo)}`,
-							);
-
-							// "label" because we are selecting by text
-							// nth(0) to disable error thrown by strict mode
-							// timeout=1000 because we are already waiting for all network events, therefore ideally we don't need to wait a lot here (default 30s)
-							const selectedOptionValues = await frame
-								.locator("//" + domElement.xpath)
-								.nth(0)
-								.selectOption({ label: params.text }, { timeout: 1000 });
-
-							const msg = `selected option ${params.text} with value ${selectedOptionValues}`;
-							logger.info(msg + ` in frame ${frameIndex}`);
-
-							return new ActionResult({
-								extractedContent: msg,
-								includeInMemory: true,
-							});
-						}
-					} catch (frameE: any) {
-						logger.error(
-							`Frame ${frameIndex} attempt failed: ${frameE.message}`,
-						);
-						logger.error(`Frame type: ${typeof frame}`);
-						logger.error(`Frame URL: ${frame.url()}`);
-					}
-
-					frameIndex++;
-				}
-
-				const msg = `Could not select option '${params.text}' in any frame`;
-				logger.info(msg);
-				return new ActionResult({
-					extractedContent: msg,
-					includeInMemory: true,
-				});
-			} catch (e: any) {
-				const msg = `Selection failed: ${e.message}`;
-				logger.error(msg);
-				return new ActionResult({
-					error: msg,
-					includeInMemory: true,
-				});
-			}
-		});
+	}
+	useStructuredOutputAction(outputModel: any) {
+		this.registerDoneAction(outputModel);
 	}
 
+	// Register ---------------------------------------------------------------
+
 	// Register actions decorator
+	/**
+	 * Decorator for registering custom actions
+	 *
+	 * @param description: Describe the LLM what the function does (better description == better function calling)
+	 */
 	action(description: string, options?: any) {
 		return this.registry.action(description, options);
 	}
 
-	// Execute an action
+	// Act --------------------------------------------------------------------
+
+	/**
+	 * Execute an action
+	 *
+	 * @param action: The action to execute
+	 * @param browserSession: The browser session
+	 */
 	@timeExecution("--act")
 	async act(
 		action: ActionModel,
-		browserContext: BrowserContext,
+		browserSession: BrowserSession,
 		pageExtractionLlm?: BaseChatModel,
-		sensitiveData?: Record<string, string>,
+		sensitiveData?: Record<string, string | Record<string, string>>,
 		availableFilePaths?: string[],
+		fileSystem?: FileSystem,
 		context?: Context,
 	): Promise<ActionResult> {
 		try {
@@ -755,8 +636,9 @@ export class Controller<T = Context> {
 					const result = await this.registry.executeAction(
 						actionName,
 						params,
-						browserContext,
+						browserSession,
 						pageExtractionLlm,
+						fileSystem,
 						sensitiveData,
 						availableFilePaths,
 						context,

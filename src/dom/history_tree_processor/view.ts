@@ -3,7 +3,7 @@ import bnLogger from "../../logging_config";
 
 // Setup logger
 const logger: Logger = bnLogger.child({
-	module: "browser_node/dom/history_tree_processor/view",
+	module: "browsernode/dom/history_tree_processor/view",
 });
 
 interface HashedDomElement {
@@ -35,8 +35,8 @@ interface CoordinateSet {
 
 // Interface for ViewportInfo
 interface ViewportInfo {
-	scrollX: number;
-	scrollY: number;
+	scrollX: number | null;
+	scrollY: number | null;
 	width: number;
 	height: number;
 }

@@ -27,6 +27,8 @@
 
 		// Decorators log
 		"experimentalDecorators": true,
-		"emitDecoratorMetadata": true
+		"emitDecoratorMetadata": true,
+
+		"esModuleInterop": true
 	}
 }

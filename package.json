@@ -1,6 +1,6 @@
 {
 	"name": "browsernode",
-	"version": "1.0.0",
+	"version": "0.4.4",
 	"description": "A powerful browser automation library with AI agent capabilities",
 	"keywords": [
 		"browser",
@@ -23,6 +23,9 @@
 	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"type": "module",
+	"bin": {
+		"browsernode-cli": "./dist/cli.js"
+	},
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -31,37 +34,57 @@
 	},
 	"files": ["dist", "README.md", "LICENSE"],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/buildDomTree.js dist/dom/",
+		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/dom_tree/index.js dist/dom/dom_tree/ && chmod +x dist/cli.js",
 		"prepublishOnly": "npm run build",
-		"test": "vitest"
+		"test": "vitest",
+		"cli": "tsx src/tokens/cli.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@types/blessed": "^0.1.25",
 		"@types/node": "^22.13.13",
+		"@types/yargs": "^17.0.33",
 		"typescript": "^5.8.2"
 	},
 	"peerDependencies": {
 		"typescript": "^5.8.2"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.56.0",
+		"@google/genai": "^1.8.0",
 		"@langchain/anthropic": "^0.3.21",
 		"@langchain/core": "^0.3.43",
 		"@langchain/google-genai": "^0.2.10",
 		"@langchain/ollama": "^0.2.1",
+		"blessed": "^0.1.81",
+		"blessed-contrib": "^4.11.0",
+		"canvas": "^2.11.2",
+		"class-transformer": "^0.5.1",
+		"commander": "^12.1.0",
 		"csv-parse": "^5.6.0",
 		"csv-stringify": "^6.5.2",
-		"dotenv": "^16.4.7",
+		"dotenv": "^16.6.1",
+		"groq": "^3.96.0",
 		"langchain": "^0.3.20",
 		"lefthook": "^1.11.9",
+		"lodash": "^4.17.21",
+		"ollama": "^0.5.16",
+		"openai": "^5.8.2",
+		"patchright": "^1.52.5",
 		"pdf-parse": "^1.1.1",
-		"playwright": "^1.51.1",
+		"playwright": "^1.52.0",
+		"posthog-node": "^5.5.0",
 		"reflect-metadata": "^0.2.2",
 		"sharp": "^0.33.5",
+		"tiktoken": "^1.0.21",
 		"ts-node": "^10.9.2",
 		"tsx": "^4.19.3",
+		"undici": "^7.11.0",
 		"uuid": "^11.1.0",
 		"vitest": "^3.0.9",
 		"winston": "^3.17.0",
+		"ws": "^8.18.3",
+		"yargs": "^18.0.0",
 		"zod": "^3.24.2",
 		"zod-to-json-schema": "^3.24.5"
 	}

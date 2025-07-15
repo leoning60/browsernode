@@ -9,7 +9,7 @@ import type { CoordinateSet, HashedDomElement, ViewportInfo } from "./view";
 import { DOMHistoryElement } from "./view";
 
 const logger = bnLogger.child({
-	module: "browser_node/dom/history_tree_processor/service",
+	module: "browsernode/dom/history_tree_processor/service",
 });
 
 class BrowserContext {

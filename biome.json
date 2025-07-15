@@ -11,6 +11,7 @@
 			".github/workflows/**",
 			"dist/**",
 			"node_modules/**",
+			"tmp/**",
 			"*.test.ts",
 			"**/*.test.*"
 		]
@@ -28,14 +29,14 @@
 			"recommended": false,
 			"style": {
 				"noNonNullAssertion": "off",
-				"useConst": "warn"
+				"useConst": "off"
 			},
 			"suspicious": {
 				"noExplicitAny": "off",
 				"noArrayIndexKey": "off"
 			},
 			"correctness": {
-				"noUnusedVariables": "warn"
+				"noUnusedVariables": "off"
 			},
 			"complexity": {
 				"noBannedTypes": "off"
