@@ -1612,7 +1612,11 @@ export class Agent<
 				const actionName = Object.keys(actionData)[0] || "unknown";
 				const actionParams = actionData[actionName] || "";
 				this.logger.info(
-					`☑️ Executed action ${i + 1}/${actions.length}: ${actionName}(${actionParams})`,
+					`☑️ Executed action ${i + 1}/${actions.length}: ${actionName}(${JSON.stringify(
+						actionParams,
+						null,
+						2,
+					)})`,
 				);
 
 				const lastResult = results[results.length - 1];
