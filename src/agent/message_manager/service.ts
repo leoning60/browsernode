@@ -200,7 +200,7 @@ export class MessageManager {
 		this.addMessageWithType(this.systemPrompt);
 
 		const placeholderMessage = createUserMessage(
-			"<example_1>\nHere is an example output of thinking and tool call. You can use it as a reference but do not copy it exactly.",
+			"<example1>\nHere is an example output of thinking and tool call. You can use it as a reference but do not copy it exactly.",
 			null,
 			true,
 		);
@@ -256,7 +256,7 @@ The file system actions do not change the browser state, so I can also click on 
 		this.addMessageWithType(exampleToolCall1);
 		this.addMessageWithType(
 			createUserMessage(
-				"Data written to todo.md.\nData written to github.md.\nClicked element with index 4.\n</example_1>",
+				"Data written to todo.md.\nData written to github.md.\nClicked element with index 4.\n</example1>",
 				null,
 				true,
 			),
@@ -266,7 +266,7 @@ The file system actions do not change the browser state, so I can also click on 
 	addNewTask(newTask: string): void {
 		this.task = newTask;
 		const taskUpdateItem = new HistoryItem({
-			systemMessage: `User updated <user_request> to: ${newTask}`,
+			systemMessage: `User updated <userRequest> to: ${newTask}`,
 		});
 		this.state.agentHistoryItems.push(taskUpdateItem);
 	}

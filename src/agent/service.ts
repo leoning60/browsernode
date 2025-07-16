@@ -1030,7 +1030,9 @@ export class Agent<
 	 */
 	@timeExecution("--getNextAction (agent)")
 	async getNextAction(inputMessages: BaseMessage[]): Promise<AgentOutput> {
-		// this.logger.debug(`---->getNextAction inputMessages: ${inputMessages}`);
+		this.logger.debug(
+			`---->getNextAction inputMessages: ${JSON.stringify(inputMessages, null, 2)}`,
+		);
 		this.logger.debug(
 			`---->getNextAction this.AgentOutput: ${this.AgentOutput}`,
 		);

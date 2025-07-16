@@ -238,15 +238,15 @@ ${formattedElementsText}
 				: "[Current todo.md is empty, fill it with your plan when applicable]";
 
 		let agentState = `
-<user_request>
+<userRequest>
 ${this.task || ""}
-</user_request>
-<file_system>
+</userRequest>
+<fileSystem>
 ${this.fileSystem?.describe() || "No file system available"}
-</file_system>
-<todo_contents>
+</fileSystem>
+<todoContents>
 ${finalTodoContents}
-</todo_contents>
+</todoContents>
 `;
 
 		if (this.sensitiveData) {
@@ -278,16 +278,16 @@ ${finalTodoContents}
 		}
 
 		let stateDescription =
-			"<agent_history>\n" +
+			"<agentHistory>\n" +
 			(this.agentHistoryDescription
 				? this.agentHistoryDescription.trim()
 				: "") +
-			"\n</agent_history>\n";
+			"\n</agentHistory>\n";
 
 		stateDescription +=
-			"<agent_state>\n" +
+			"<agentState>\n" +
 			this.getAgentStateDescription().trim() +
-			"\n</agent_state>\n";
+			"\n</agentState>\n";
 		stateDescription +=
 			"<browser_state>\n" +
 			this.getBrowserStateDescription().trim() +
