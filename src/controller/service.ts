@@ -90,66 +90,63 @@ export class Controller<T = Context> {
 			});
 		} else {
 			// If no output model is specified, use the default DoneAction model
+			const displayFilesInDoneText = this.displayFilesInDoneText;
 			this.registry.action(
 				"Complete task - provide a summary of results for the user. Set success=True if task completed successfully, false otherwise. Text should be your response to the user summarizing results. Include files you would like to display to the user in filesToDisplay.",
 				{
 					paramModel: DoneAction,
 				},
-			)(
-				async (
-					params: z.infer<typeof DoneAction>,
-					browserSession: BrowserSession,
-					pageExtractionLlm?: BaseChatModel,
-					fileSystem?: FileSystem,
-				) => {
-					let userMessage = params.text;
+			)(async function done(
+				params: z.infer<typeof DoneAction>,
+				browserSession: BrowserSession,
+				pageExtractionLlm?: BaseChatModel,
+				fileSystem?: FileSystem,
+			) {
+				let userMessage = params.text;
 
-					const lenText = params.text.length;
-					const lenMaxMemory = 100;
-					let memory = `Task completed: ${params.success} - ${params.text.substring(0, lenMaxMemory)}`;
-					if (lenText > lenMaxMemory) {
-						memory += ` - ${lenText - lenMaxMemory} more characters`;
-					}
+				const lenText = params.text.length;
+				const lenMaxMemory = 100;
+				let memory = `Task completed: ${params.success} - ${params.text.substring(0, lenMaxMemory)}`;
+				if (lenText > lenMaxMemory) {
+					memory += ` - ${lenText - lenMaxMemory} more characters`;
+				}
 
-					const attachments: string[] = [];
-					if (params.filesToDisplay && fileSystem) {
-						if (this.displayFilesInDoneText) {
-							let fileMsg = "";
-							for (const fileName of params.filesToDisplay) {
-								if (fileName === "todo.md") continue;
-								const fileContent = await fileSystem.displayFile(fileName);
-								if (fileContent) {
-									fileMsg += `\n\n${fileName}:\n${fileContent}`;
-									attachments.push(fileName);
-								}
+				const attachments: string[] = [];
+				if (params.filesToDisplay && fileSystem) {
+					if (displayFilesInDoneText) {
+						let fileMsg = "";
+						for (const fileName of params.filesToDisplay) {
+							if (fileName === "todo.md") continue;
+							const fileContent = await fileSystem.displayFile(fileName);
+							if (fileContent) {
+								fileMsg += `\n\n${fileName}:\n${fileContent}`;
+								attachments.push(fileName);
 							}
-							if (fileMsg) {
-								userMessage += "\n\nAttachments:";
-								userMessage += fileMsg;
-							} else {
-								logger.warn(
-									"Agent wanted to display files but none were found",
-								);
-							}
+						}
+						if (fileMsg) {
+							userMessage += "\n\nAttachments:";
+							userMessage += fileMsg;
 						} else {
-							for (const fileName of params.filesToDisplay) {
-								if (fileName === "todo.md") continue;
-								const fileContent = await fileSystem.displayFile(fileName);
-								if (fileContent) {
-									attachments.push(fileName);
-								}
+							logger.warn("Agent wanted to display files but none were found");
+						}
+					} else {
+						for (const fileName of params.filesToDisplay) {
+							if (fileName === "todo.md") continue;
+							const fileContent = await fileSystem.displayFile(fileName);
+							if (fileContent) {
+								attachments.push(fileName);
 							}
 						}
 					}
+				}
 
-					return new ActionResult({
-						isDone: true,
-						success: params.success,
-						extractedContent: userMessage,
-						longTermMemory: memory,
-					});
-				},
-			);
+				return new ActionResult({
+					isDone: true,
+					success: params.success,
+					extractedContent: userMessage,
+					longTermMemory: memory,
+				});
+			});
 		}
 	}
 
