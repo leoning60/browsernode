@@ -11,6 +11,7 @@ import { EventBus } from "./eventbus_utli";
 config();
 import {
 	ActionResult,
+	AgentBrain,
 	AgentError,
 	AgentHistory,
 	AgentHistoryList,
@@ -1064,7 +1065,15 @@ export class Agent<
 		this.logger.debug(
 			`---->getNextAction response: ${JSON.stringify(response, null, 2)}`,
 		);
-		const parsed = response.completion as unknown as AgentOutput;
+		const completionData = response.completion as any;
+		// Create a proper AgentOutput instance instead of just type casting
+		const parsed = new AgentOutput(
+			completionData.evaluationPreviousGoal,
+			completionData.memory,
+			completionData.nextGoal,
+			completionData.action,
+			completionData.thinking,
+		);
 
 		// Cut the number of actions to maxActionsPerStep if needed
 		this.logger.debug(
