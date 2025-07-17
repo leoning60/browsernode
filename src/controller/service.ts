@@ -408,7 +408,6 @@ export class Controller<T = Context> {
 			browserSession: BrowserSession,
 			pageExtractionLlm?: BaseChatModel,
 			fileSystem?: FileSystem,
-			sensitiveData?: Record<string, string>,
 			availableFilePaths?: string[],
 			hasSensitiveData: boolean = false,
 		) {

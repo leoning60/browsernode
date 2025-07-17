@@ -240,6 +240,7 @@ class SpecialActionParameters {
 	fileSystem?: FileSystem | null = null;
 	availableFilePaths?: string[] | null = null;
 	hasSensitiveData?: boolean = false;
+	sensitiveData?: Record<string, string | Record<string, string>> | null = null;
 
 	constructor(params: Partial<SpecialActionParameters> = {}) {
 		Object.assign(this, params);

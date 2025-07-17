@@ -49,6 +49,7 @@ export class Registry<Context = any> {
 			availableFilePaths: Array,
 			hasSensitiveData: Boolean,
 			fileSystem: Object, // FileSystem type
+			sensitiveData: Object, // Record<string, string | Record<string, string>>
 		};
 	}
 
@@ -376,8 +377,9 @@ export class Registry<Context = any> {
 				browserContext: browserSession, // legacy support
 				pageExtractionLlm: pageExtractionLlm,
 				availableFilePaths: availableFilePaths,
-				hasSensitiveData: actionName === "input_text" && Boolean(sensitiveData),
+				hasSensitiveData: actionName === "inputText" && Boolean(sensitiveData),
 				fileSystem: fileSystem,
+				sensitiveData: sensitiveData,
 			};
 
 			// Handle async page parameter if needed
