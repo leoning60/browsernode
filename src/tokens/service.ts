@@ -59,7 +59,8 @@ export class TokenCost {
 
 	private readonly includeCost: boolean;
 	private readonly usageHistory: TokenUsageEntry[] = [];
-	private readonly registeredLLMs: Map<string, BaseChatModel> = new Map();
+	private readonly registeredLLMs: WeakMap<BaseChatModel, boolean> =
+		new WeakMap();
 	private pricingData: Record<string, any> | null = null;
 	private initialized = false;
 	private readonly cacheDir: string;
@@ -369,18 +370,21 @@ export class TokenCost {
 	}
 
 	registerLLM(llm: BaseChatModel): BaseChatModel {
-		// Use instance ID as key to avoid collisions between multiple instances
-		const instanceId = String(Math.random());
+		/**
+		 * Register an LLM to automatically track its token usage
+		 *
+		 * @dev Guarantees that the same instance is not registered multiple times
+		 */
 
 		// Check if this exact instance is already registered
-		if (this.registeredLLMs.has(instanceId)) {
+		if (this.registeredLLMs.has(llm)) {
 			logger.debug(
-				`LLM instance ${instanceId} (${llm.provider}_${llm.model}) is already registered`,
+				`LLM instance (${llm.provider}_${llm.model}) is already registered`,
 			);
 			return llm;
 		}
 
-		this.registeredLLMs.set(instanceId, llm);
+		this.registeredLLMs.set(llm, true);
 
 		// Store the original method
 		const originalAinvoke = llm.ainvoke.bind(llm);
