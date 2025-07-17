@@ -182,7 +182,7 @@ export class DomService {
 							return result;
 						} catch (error) {
 							console.error("Error in browser evaluate:", error);
-							return { error: (error as any).toString() };
+							return { error: String(error) };
 						}
 					},
 					{ jsCodeString: this.jsCode, evaluationArgs: args },
@@ -257,6 +257,11 @@ export class DomService {
 		const jsNodeMap = evalPage.map;
 		const jsRootId = evalPage["rootId"];
 
+		// Check if we have valid data
+		if (!jsNodeMap || jsRootId === null || jsRootId === undefined) {
+			throw new Error("Invalid DOM data: missing nodeMap or rootId");
+		}
+
 		const selectorMap: SelectorMap = {};
 		const nodeMap: Record<string, DOMBaseNode> = {};
 
@@ -291,7 +296,7 @@ export class DomService {
 							continue;
 						}
 
-						const childNode = nodeMap[childId.toString()];
+						const childNode = nodeMap[`${childId}`];
 						if (!childNode) {
 							continue;
 						}
@@ -309,7 +314,7 @@ export class DomService {
 			}
 		}
 
-		const htmlToDict = nodeMap[jsRootId.toString()];
+		const htmlToDict = nodeMap[`${jsRootId}`];
 
 		// Clean up references
 		delete (evalPage as any).map;
