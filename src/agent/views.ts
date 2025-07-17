@@ -395,44 +395,74 @@ class AgentOutput {
 	}
 
 	static schemaWithCustomActions(customActions: ActionModel): any {
-		// Create base schema structure
-		const schema = z.object({
-			thinking: z.string().optional().nullable(),
-			evaluationPreviousGoal: z
-				.string()
-				.describe(
-					"Success|Failed|Unknown with explanation of previous goal status",
-				),
-			memory: z
-				.string()
-				.describe(
-					"Description of what has been done and what needs to be remembered",
-				),
-			nextGoal: z.string().describe("What needs to be done next"),
-			action: z
-				.array(
-					z.object({}), // Will be populated with action properties dynamically
-				)
-				.min(1)
-				.describe("List of actions to execute"),
-		});
+		// Create base schema structure with root description
+		const schema = z
+			.object({
+				thinking: z.string().optional().nullable().default(null),
+				evaluationPreviousGoal: z
+					.string()
+					.describe(
+						"Success|Failed|Unknown with explanation of previous goal status",
+					),
+				memory: z
+					.string()
+					.describe(
+						"Description of what has been done and what needs to be remembered",
+					),
+				nextGoal: z.string().describe("What needs to be done next"),
+				action: z
+					.array(
+						z.object({}), // Will be populated with action union dynamically
+					)
+					.min(1)
+					.describe("List of actions to execute"),
+			})
+			.describe("AgentOutput model with custom actions");
+
 		// Add action properties from customActions
 		if (customActions) {
-			// Create object shape for actions
-			const actionProperties: Record<
-				string,
-				z.ZodOptional<z.ZodObject<any>>
-			> = {};
+			// Create individual action schemas as a union
+			const actionSchemas: z.ZodObject<any, any>[] = [];
 
-			// Generate properties for each action
+			// Generate individual schemas for each action
 			for (const [actionName, paramModel] of Object.entries(customActions)) {
-				// Make sure paramModel.paramModel is a Zod schema and convert to optional
 				if (paramModel && paramModel.paramModel) {
-					actionProperties[actionName] = paramModel.paramModel.optional();
+					// Create a schema for this specific action only
+					const actionSchema = z.object({
+						[actionName]: paramModel.paramModel,
+					});
+					actionSchemas.push(actionSchema);
 				}
 			}
-			// Set the array item type to be an object with all possible action properties
-			schema.shape.action = z.array(z.object(actionProperties)).min(1);
+
+			// Create a union of all possible action schemas
+			if (actionSchemas.length > 0) {
+				let actionUnion: z.ZodTypeAny;
+				if (actionSchemas.length === 1) {
+					const firstSchema = actionSchemas[0];
+					if (firstSchema) {
+						actionUnion = firstSchema;
+					} else {
+						throw new Error("First action schema is undefined");
+					}
+				} else {
+					actionUnion = z.union(
+						actionSchemas as [
+							z.ZodObject<any, any>,
+							z.ZodObject<any, any>,
+							...z.ZodObject<any, any>[],
+						],
+					);
+				}
+
+				// Cast to bypass TypeScript's strict typing for schema.shape.action
+				(schema as any).shape.action = z
+					.array(actionUnion)
+					.min(1)
+					.describe(
+						"Union of all available action models that maintains ActionModel interface",
+					);
+			}
 		}
 		return schema;
 	}
