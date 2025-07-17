@@ -38,12 +38,22 @@ export class GoogleMessageSerializer {
 		 *     - systemMessage: System instruction string or None
 		 */
 
-		messages = structuredClone(messages);
+		// Create a simple copy of messages to avoid structuredClone issues with methods
+		const messagesCopy = messages.map((msg) => ({
+			role: msg.role,
+			content: msg.content,
+			name: msg.name,
+			cache: msg.cache,
+			...(msg.role === "assistant" && {
+				refusal: (msg as AssistantMessage).refusal,
+				toolCalls: (msg as AssistantMessage).toolCalls,
+			}),
+		}));
 
 		const formattedMessages: ContentListUnion = [];
 		let systemMessage: string | null = null;
 
-		for (const message of messages) {
+		for (const message of messagesCopy) {
 			const role = message.role || null;
 
 			// Handle system/developer messages
