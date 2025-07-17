@@ -153,14 +153,63 @@ export class DomService {
 			//   })()`,
 			//   args,
 			// )) as any;
-			const evalPage = (await (this.page as any).evaluate(
-				this.jsCode,
-				args,
-			)) as any;
+
+			// console.log(
+			// 	"---->DomService buildDomTree this.jsCode:",
+			// 	JSON.stringify(this.jsCode, null, 2),
+			// );
+			// console.log(
+			// 	"---->DomService buildDomTree args:",
+			// 	JSON.stringify(args, null, 2),
+			// );
+			// console.log("---->DomService buildDomTree this.page:", this.page);
+			let evalPage: any;
+			try {
+				// console.log("---->DomService about to evaluate JavaScript code");
+				// Use a simpler approach - pass the function as a string and execute it with parameters
+				// Playwright requires wrapping multiple arguments in an object
+				evalPage = (await (this.page as any).evaluate(
+					({
+						jsCodeString,
+						evaluationArgs,
+					}: { jsCodeString: string; evaluationArgs: any }) => {
+						try {
+							// Remove any trailing semicolon from the function code
+							const cleanCode = jsCodeString.trim().replace(/;$/, "");
+							// Create the function and call it immediately
+							const buildDomTreeFn = eval(`(${cleanCode})`);
+							const result = buildDomTreeFn(evaluationArgs);
+							return result;
+						} catch (error) {
+							console.error("Error in browser evaluate:", error);
+							return { error: (error as any).toString() };
+						}
+					},
+					{ jsCodeString: this.jsCode, evaluationArgs: args },
+				)) as any;
+				// console.log(
+				// 	"---->DomService JavaScript evaluation completed, result type:",
+				// 	typeof evalPage,
+				// );
+				// console.log(
+				// 	"---->DomService JavaScript evaluation result keys:",
+				// 	evalPage ? Object.keys(evalPage) : "null/undefined",
+				// );
+			} catch (e: any) {
+				this.logger.error("Error evaluating JavaScript: %s", e);
+				throw e;
+			}
 
 			// NOTE: We execute JS code in the browser to extract important DOM information.
 			//       The returned hash map contains information about the DOM tree and the
 			//       relationship between the DOM elements.
+
+			// Check if evalPage is valid before proceeding
+			if (!evalPage) {
+				this.logger.error("JavaScript evaluation returned undefined or null");
+				throw new Error("JavaScript evaluation failed: returned undefined");
+			}
+
 			// Only log performance metrics in debug mode
 			if (debugMode && "perfMetrics" in evalPage) {
 				const perf = evalPage.perfMetrics;
