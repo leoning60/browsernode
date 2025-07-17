@@ -107,10 +107,13 @@ export class GoogleMessageSerializer {
 						const [header, data] = url.split(",", 2);
 						// Use the base64 data directly
 						if (!data) continue;
-						const imageBytes = Buffer.from(data, "utf8").toString("base64");
 
-						// Add image part
-						const imagePart = createPartFromBase64(imageBytes, "image/png");
+						// Extract MIME type from header (e.g., "data:image/png;base64")
+						const mimeType =
+							header?.split(";")[0]?.replace("data:", "") || "image/png";
+
+						// Add image part - data is already base64 encoded
+						const imagePart = createPartFromBase64(data, mimeType);
 
 						messageParts.push(imagePart);
 					}
