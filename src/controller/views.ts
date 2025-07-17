@@ -71,6 +71,67 @@ export const UploadFileAction = z.object({
 	path: z.string(),
 });
 
+// ExtractStructuredDataAction
+export const ExtractStructuredDataAction = z.object({
+	query: z.string(),
+	extractLinks: z.boolean(),
+});
+
+// ScrollToTextAction
+export const ScrollToTextAction = z.object({
+	text: z.string(),
+});
+
+// WriteFileAction
+export const WriteFileAction = z.object({
+	fileName: z.string(),
+	content: z.string(),
+});
+
+// AppendFileAction
+export const AppendFileAction = z.object({
+	fileName: z.string(),
+	content: z.string(),
+});
+
+// ReadFileAction
+export const ReadFileAction = z.object({
+	fileName: z.string(),
+});
+
+// GetDropdownOptionsAction
+export const GetDropdownOptionsAction = z.object({
+	index: z.number(),
+});
+
+// SelectDropdownOptionAction
+export const SelectDropdownOptionAction = z.object({
+	index: z.number(),
+	text: z.string(),
+});
+
+// Google Sheets Actions
+export const ReadCellContentsAction = z.object({
+	cellOrRange: z.string(),
+});
+
+export const UpdateCellContentsAction = z.object({
+	cellOrRange: z.string(),
+	newContentsTsv: z.string(),
+});
+
+export const ClearCellContentsAction = z.object({
+	cellOrRange: z.string(),
+});
+
+export const SelectCellOrRangeAction = z.object({
+	cellOrRange: z.string(),
+});
+
+export const FallbackInputSingleCellAction = z.object({
+	text: z.string(),
+});
+
 // ExtractPageContentAction
 export const ExtractPageContentAction = z.object({
 	value: z.string(),
