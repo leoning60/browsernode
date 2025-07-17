@@ -228,8 +228,9 @@ export class ChatAnthropic implements BaseChatModel {
 					if ("type" in contentBlock && contentBlock.type === "tool_use") {
 						// Parse the tool input as the structured output
 						try {
+							// Use the actual data from contentBlock.input instead of creating empty instance
 							return {
-								completion: new outputFormat() as T,
+								completion: contentBlock.input as T,
 								usage,
 							} as ChatInvokeCompletion<T>;
 						} catch (e) {
