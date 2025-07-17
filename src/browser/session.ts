@@ -529,7 +529,7 @@ export class BrowserSession extends EventEmitter {
 
 		try {
 			// Setup
-			this.browserProfile.detectDisplayConfiguration();
+			await this.browserProfile.detectDisplayConfiguration();
 			this.prepareUserDataDir();
 
 			// Get playwright object
@@ -3668,7 +3668,7 @@ export class BrowserSession extends EventEmitter {
 		const remaining = Math.max(minWaitTime - elapsed, 0);
 
 		// Just for logging, calculate how much data was downloaded
-		let bytesUsed: number | null = null;
+		let bytesUsed: number | undefined = undefined;
 		try {
 			bytesUsed = await (page as any).evaluate(
 				`() => {
@@ -3684,6 +3684,7 @@ export class BrowserSession extends EventEmitter {
 			);
 		} catch (error) {
 			// Ignore errors getting bytes used
+			bytesUsed = undefined;
 		}
 
 		let tabIdx: string | number;
@@ -3698,7 +3699,7 @@ export class BrowserSession extends EventEmitter {
 				? `, waiting +${remaining.toFixed(2)}s for all frames to finish`
 				: "";
 
-		if (bytesUsed !== null) {
+		if (bytesUsed !== undefined) {
 			this.logger.debug(
 				`---->_waitForPageAndFramesLoad bytesUsed: ${bytesUsed}`,
 			);

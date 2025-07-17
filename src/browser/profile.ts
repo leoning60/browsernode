@@ -1,6 +1,9 @@
 import { URL } from "node:url";
+import si from "systeminformation";
 import { v4 as uuidv4 } from "uuid";
+import { Logger } from "winston";
 import { z } from "zod";
+import bnLogger from "../logging_config";
 import type {
 	Browser,
 	BrowserContext,
@@ -11,6 +14,10 @@ import type {
 	ProxySettings,
 	ViewportSize,
 } from "./types";
+
+const logger: Logger = bnLogger.child({
+	module: "browsernode/browser/profile",
+});
 
 // Chrome debugging port
 //use a non-default port to avoid conflicts with other tools / devs using 9222
@@ -276,17 +283,39 @@ export function validateCliArg(arg: string): string {
 }
 
 // Display detection functions
-export function getDisplaySize(): ViewportSize | null {
-	// This would need platform-specific implementation
-	// For now, return null as we can't detect display size in Node.js without additional packages
+export async function getDisplaySize(): Promise<ViewportSize | null> {
+	try {
+		const graphics = await si.graphics();
+		const displays = graphics.displays;
+
+		if (displays && displays.length > 0) {
+			// Find the main display (primary display)
+			let mainDisplay = displays.find((display) => display.main === true);
+
+			// If no main display found, use the first display
+			if (!mainDisplay) {
+				mainDisplay = displays[0];
+			}
+
+			if (mainDisplay && mainDisplay.resolutionX && mainDisplay.resolutionY) {
+				return {
+					width: parseInt(mainDisplay.resolutionX.toString()),
+					height: parseInt(mainDisplay.resolutionY.toString()),
+				};
+			}
+		}
+	} catch (error) {
+		logger.debug(`Failed to get display size: ${error}`);
+	}
+
 	return null;
 }
 
+/**
+ * Returns recommended x, y offsets for window positioning
+ *
+ */
 export function getWindowAdjustments(): [number, number] {
-	/**
-	 * Returns recommended x, y offsets for window positioning
-	 *
-	 */
 	const platform = process.platform;
 	if (platform === "darwin") {
 		return [-4, 24]; // macOS,macOS has a small title bar, no border
@@ -662,13 +691,19 @@ export class BrowserProfile implements BrowserProfileOptions {
 		// and warn about potential corruption
 	}
 
-	detectDisplayConfiguration(): void {
+	async detectDisplayConfiguration(): Promise<void> {
 		/**
 		 * Detect the system display size and initialize the display-related config defaults:
 		 * screen, windowSize, windowPosition, viewport, noViewport, deviceScaleFactor
 		 */
-		const displaySize = getDisplaySize();
+		const displaySize = await getDisplaySize();
+		// logger.debug(
+		// 	`---->detectDisplayConfiguration displaySize: ${JSON.stringify(displaySize, null, 2)}`,
+		// );
 		const hasScreenAvailable = Boolean(displaySize);
+		// logger.debug(
+		// 	`---->detectDisplayConfiguration hasScreenAvailable: ${hasScreenAvailable}`,
+		// );
 
 		this.screen = this.screen || displaySize || { width: 1280, height: 1100 };
 
