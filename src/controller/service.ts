@@ -823,6 +823,9 @@ ${content}`;
 		// File System Actions
 		this.registry.action(
 			"Write content to fileName in file system, use only .md or .txt extensions.",
+			{
+				paramModel: WriteFileAction,
+			},
 		)(async function writeFile(
 			params: z.infer<typeof WriteFileAction>,
 			browserSession: BrowserSession,
@@ -847,95 +850,92 @@ ${content}`;
 			});
 		});
 
-		this.registry.action("Append content to fileName in file system")(
-			async function appendFile(
-				params: z.infer<typeof AppendFileAction>,
-				browserSession: BrowserSession,
-				pageExtractionLlm?: BaseChatModel,
-				fileSystem?: FileSystem,
-			) {
-				if (!fileSystem) {
-					return new ActionResult({
-						error: "File system is required for file operations",
-					});
-				}
-
-				const result = await fileSystem.appendFile(
-					params.fileName,
-					params.content,
-				);
-				logger.info(`💾 ${result}`);
+		this.registry.action("Append content to fileName in file system", {
+			paramModel: AppendFileAction,
+		})(async function appendFile(
+			params: z.infer<typeof AppendFileAction>,
+			browserSession: BrowserSession,
+			pageExtractionLlm?: BaseChatModel,
+			fileSystem?: FileSystem,
+		) {
+			if (!fileSystem) {
 				return new ActionResult({
-					extractedContent: result,
-					includeInMemory: true,
-					longTermMemory: result,
+					error: "File system is required for file operations",
 				});
-			},
-		);
+			}
 
-		this.registry.action("Read fileName from file system")(
-			async function readFile(
-				params: z.infer<typeof ReadFileAction>,
-				browserSession: BrowserSession,
-				pageExtractionLlm?: BaseChatModel,
-				fileSystem?: FileSystem,
-				sensitiveData?: Record<string, string | Record<string, string>>,
-				availableFilePaths?: string[],
-			) {
-				if (!fileSystem) {
-					return new ActionResult({
-						error: "File system is required for file operations",
-					});
-				}
+			const result = await fileSystem.appendFile(
+				params.fileName,
+				params.content,
+			);
+			logger.info(`💾 ${result}`);
+			return new ActionResult({
+				extractedContent: result,
+				includeInMemory: true,
+				longTermMemory: result,
+			});
+		});
 
-				let result: string;
-				if (
-					availableFilePaths &&
-					availableFilePaths.includes(params.fileName)
-				) {
-					// Read from available file paths (simplified file system access)
-					try {
-						// In a real implementation, you'd use fs.promises.readFile or similar
-						result = `Read from file ${params.fileName}.\n<content>\n[Content would be read from file system]\n</content>`;
-					} catch (e: any) {
-						result = `Error reading file: ${e.message}`;
-					}
-				} else {
-					result = fileSystem.readFile(params.fileName);
-				}
-
-				const MAX_MEMORY_SIZE = 1000;
-				let memory: string;
-				if (result.length > MAX_MEMORY_SIZE) {
-					const lines = result.split("\n");
-					let display = "";
-					let linesCount = 0;
-					for (const line of lines) {
-						if (display.length + line.length < MAX_MEMORY_SIZE) {
-							display += line + "\n";
-							linesCount++;
-						} else {
-							break;
-						}
-					}
-					const remainingLines = lines.length - linesCount;
-					memory =
-						remainingLines > 0
-							? `${display}${remainingLines} more lines...`
-							: display;
-				} else {
-					memory = result;
-				}
-
-				logger.info(`💾 ${memory}`);
+		this.registry.action("Read fileName from file system", {
+			paramModel: ReadFileAction,
+		})(async function readFile(
+			params: z.infer<typeof ReadFileAction>,
+			browserSession: BrowserSession,
+			pageExtractionLlm?: BaseChatModel,
+			fileSystem?: FileSystem,
+			sensitiveData?: Record<string, string | Record<string, string>>,
+			availableFilePaths?: string[],
+		) {
+			if (!fileSystem) {
 				return new ActionResult({
-					extractedContent: result,
-					includeInMemory: true,
-					longTermMemory: memory,
-					includeExtractedContentOnlyOnce: true,
+					error: "File system is required for file operations",
 				});
-			},
-		);
+			}
+
+			let result: string;
+			if (availableFilePaths && availableFilePaths.includes(params.fileName)) {
+				// Read from available file paths (simplified file system access)
+				try {
+					// In a real implementation, you'd use fs.promises.readFile or similar
+					result = `Read from file ${params.fileName}.\n<content>\n[Content would be read from file system]\n</content>`;
+				} catch (e: any) {
+					result = `Error reading file: ${e.message}`;
+				}
+			} else {
+				result = fileSystem.readFile(params.fileName);
+			}
+
+			const MAX_MEMORY_SIZE = 1000;
+			let memory: string;
+			if (result.length > MAX_MEMORY_SIZE) {
+				const lines = result.split("\n");
+				let display = "";
+				let linesCount = 0;
+				for (const line of lines) {
+					if (display.length + line.length < MAX_MEMORY_SIZE) {
+						display += line + "\n";
+						linesCount++;
+					} else {
+						break;
+					}
+				}
+				const remainingLines = lines.length - linesCount;
+				memory =
+					remainingLines > 0
+						? `${display}${remainingLines} more lines...`
+						: display;
+			} else {
+				memory = result;
+			}
+
+			logger.info(`💾 ${memory}`);
+			return new ActionResult({
+				extractedContent: result,
+				includeInMemory: true,
+				longTermMemory: memory,
+				includeExtractedContentOnlyOnce: true,
+			});
+		});
 
 		// Dropdown Actions
 		this.registry.action("Get all options from a native dropdown", {
