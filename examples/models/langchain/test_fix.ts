@@ -1,6 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { AgentOutput } from "../../src/agent/views";
-import { ActionModel } from "../../src/controller/registry/views";
+import { AgentOutput } from "../../../src/agent/views";
+import { ActionModel } from "../../../src/controller/registry/views";
 import { ChatLangchain } from "./chat";
 
 async function testLangChainIntegration() {
