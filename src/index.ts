@@ -1,5 +1,10 @@
-export { Agent } from "./agent/service";
+import bnLogger from "./logging_config";
+export const logger = bnLogger;
 
+export { Agent } from "./agent/service";
+export { SystemPrompt } from "./agent/prompts";
+
+export { ActionModel } from "./controller/registry/views";
 export {
 	AgentOutput,
 	AgentState,
@@ -7,8 +12,15 @@ export {
 	AgentHistoryList,
 	ActionResult,
 } from "./agent/views";
+export { Controller } from "./controller/service";
 export { Browser, BrowserConfig } from "./browser/browser";
-export { BrowserContext, BrowserContextConfig } from "./browser/context";
+export {
+	BrowserContext,
+	BrowserContextConfig,
+	BrowserSession,
+} from "./browser/context";
+export { DomService } from "./dom/service";
+
 export {
 	BrowserProfile,
 	createBrowserProfile,
@@ -26,4 +38,25 @@ export {
 	type BrowserConnectArgs,
 	type BrowserLaunchPersistentContextArgs,
 } from "./browser/profile";
-export { Controller } from "./controller/service";
+
+export { ChatAnthropic } from "./llm/anthropic/chat";
+export { ChatAzureOpenAI } from "./llm/azure/chat";
+export { ChatGoogle } from "./llm/google/chat";
+// export { ChatGroq } from "./llm/groq/chat";
+export { ChatOllama } from "./llm/ollama/chat";
+export { ChatOpenAI } from "./llm/openai/chat";
+
+// Export message types
+// export type {
+// 	BaseMessage,
+// 	UserMessage,
+// 	SystemMessage,
+// 	AssistantMessage,
+// 	ContentText,
+// 	ContentRefusal,
+// 	ContentImage,
+// 	ImageURL,
+// 	Function,
+// 	ToolCall,
+// 	SupportedImageMediaType,
+// } from "./llm";
