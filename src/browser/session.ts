@@ -1,6 +1,7 @@
 import { exec, spawn } from "child_process";
 import { EventEmitter } from "events";
 import * as fs from "fs";
+import * as http from "http";
 import * as os from "os";
 import * as path from "path";
 import { setTimeout } from "timers/promises";
@@ -1468,6 +1469,56 @@ export class BrowserSession extends EventEmitter {
 		});
 	}
 
+	/**
+	 * Get Chrome version info and WebSocket debugger URL from CDP endpoint
+	 */
+	private async getChromeVersionInfo(cdpUrl: string): Promise<{
+		webSocketDebuggerUrl?: string;
+		[key: string]: any;
+	} | null> {
+		return new Promise((resolve) => {
+			// Ensure the URL ends with /json/version
+			const versionUrl = cdpUrl.endsWith("/")
+				? `${cdpUrl}json/version`
+				: `${cdpUrl}/json/version`;
+
+			let responseData = "";
+			const req = http.get(versionUrl, (res: any) => {
+				if (res.statusCode === 200) {
+					res.on("data", (chunk: string) => {
+						responseData += chunk;
+					});
+
+					res.on("end", () => {
+						try {
+							const versionInfo = JSON.parse(responseData);
+							resolve(versionInfo);
+						} catch (error) {
+							this.logger.error(`Failed to parse version info: ${error}`);
+							resolve(null);
+						}
+					});
+				} else {
+					this.logger.error(
+						`HTTP ${res.statusCode} when fetching version info`,
+					);
+					resolve(null);
+				}
+			});
+
+			req.on("error", (error: any) => {
+				this.logger.error(`Error fetching version info: ${error.message}`);
+				resolve(null);
+			});
+
+			req.setTimeout(5000, () => {
+				req.destroy();
+				this.logger.error("Timeout fetching version info");
+				resolve(null);
+			});
+		});
+	}
+
 	private parseCommandLine(commandLine: string): string[] {
 		// Simple command line parsing - this could be more sophisticated
 		// For now, split by spaces but handle quoted arguments
@@ -1539,10 +1590,44 @@ export class BrowserSession extends EventEmitter {
 			throw new Error("chromium instance is null");
 		}
 
-		this.browser = await this.chromium.connectOverCDP(
-			this.cdpUrl,
-			this.browserProfile.kwargsForConnect(),
-		);
+		try {
+			// Get the WebSocket debugger URL from the CDP version endpoint
+			this.logger.debug(`Fetching version info from: ${this.cdpUrl}`);
+			const versionInfo = await this.getChromeVersionInfo(this.cdpUrl);
+			this.logger.debug(`Version info received:`, versionInfo);
+
+			if (!versionInfo || !versionInfo.webSocketDebuggerUrl) {
+				this.logger.error(
+					`Invalid version info: ${JSON.stringify(versionInfo)}`,
+				);
+				throw new Error("Could not get WebSocket URL from Chrome CDP endpoint");
+			}
+
+			this.logger.debug(
+				`Connecting to WebSocket: ${versionInfo.webSocketDebuggerUrl}`,
+			);
+
+			// Connect using the specific WebSocket URL to avoid Playwright CDP discovery bug
+			this.browser = await this.chromium.connectOverCDP({
+				wsEndpoint: versionInfo.webSocketDebuggerUrl,
+				timeout: 20000, // 20 second timeout for connection
+				slowMo: 50, // Add slight delay to ensure stability
+				...this.browserProfile.kwargsForConnect(),
+			});
+
+			this.logger.info("✅ Successfully connected via CDP WebSocket");
+		} catch (error: any) {
+			this.logger.error(
+				`❌ Failed to connect via CDP WebSocket: ${error.message}`,
+			);
+			this.logger.info("🔄 Falling back to original CDP connection method");
+			// Fallback to the original method in case the workaround fails
+			this.browser = await this.chromium.connectOverCDP(
+				this.cdpUrl,
+				this.browserProfile.kwargsForConnect(),
+			);
+		}
+
 		this.setBrowserKeepAlive(true); // we connected to an existing browser, dont kill it at the end
 	}
 
@@ -1587,7 +1672,7 @@ export class BrowserSession extends EventEmitter {
 			if (contexts && contexts.length > 0) {
 				this.browserContext = contexts[0];
 				this.logger.info(
-					`🌎 Using first browserContext available in existing browser: ${this.browserContext}`,
+					`🌎 Using first browserContext available in existing browser: ${JSON.stringify(this.browserContext, null, 2)}`,
 				);
 			} else {
 				this.browserContext = await this.browser.newContext(
@@ -1650,7 +1735,16 @@ export class BrowserSession extends EventEmitter {
 		// playwright does not give us a browser object at all when we use launchPersistentContext()!
 
 		// Detect any new child chrome processes that we might have launched above
-		await this.detectNewBrowserProcess(childPidsBeforeLaunch);
+		// Skip process detection if we connected to an existing browser via CDP/WSS
+		const connectedToExistingBrowser =
+			this.cdpUrl || this.wssUrl || this.browserPid;
+		if (!connectedToExistingBrowser) {
+			await this.detectNewBrowserProcess(childPidsBeforeLaunch);
+		} else {
+			this.logger.debug(
+				`⏭️ Skipping process detection for existing browser connection: ${this.connectionStr}`,
+			);
+		}
 
 		if (this.browser) {
 			if (!this.browser.isConnected()) {
@@ -2012,9 +2106,9 @@ export class BrowserSession extends EventEmitter {
 			}
 		}
 
-		this.logger.info(
-			`----> detectNewBrowserProcess newChromeProcs: ${JSON.stringify(newChromeProcs, null, 2)}`,
-		);
+		// this.logger.info(
+		// 	`----> detectNewBrowserProcess newChromeProcs: ${JSON.stringify(newChromeProcs, null, 2)}`,
+		// );
 
 		if (newChromeProcs.length === 0) {
 			this.logger.debug(
