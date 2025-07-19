@@ -30,6 +30,10 @@
 		".": {
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
+		},
+		"./llm": {
+			"types": "./dist/llm/index.d.ts",
+			"import": "./dist/llm/index.js"
 		}
 	},
 	"files": ["dist", "README.md", "LICENSE"],
@@ -53,7 +57,7 @@
 		"@anthropic-ai/sdk": "^0.56.0",
 		"@google/genai": "^1.8.0",
 		"@langchain/anthropic": "^0.3.21",
-		"@langchain/core": "^0.3.43",
+		"@langchain/core": "^0.3.64",
 		"@langchain/google-genai": "^0.2.10",
 		"@langchain/ollama": "^0.2.1",
 		"@types/turndown": "^5.0.5",
