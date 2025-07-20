@@ -37,24 +37,24 @@ export class SchemaOptimizer {
 		// In practice, you might need to use a library like @apidevtools/json-schema-ref-parser
 		// or implement your own schema generation logic
 		const originalSchema = this.generateSchemaFromModel(model);
-		console.debug(
-			`---->SchemaOptimizer createOptimizedJsonSchema originalSchema:${JSON.stringify(
-				originalSchema,
-				null,
-				2,
-			)}`,
-		);
+		// console.debug(
+		// 	`---->SchemaOptimizer createOptimizedJsonSchema originalSchema:${JSON.stringify(
+		// 		originalSchema,
+		// 		null,
+		// 		2,
+		// 	)}`,
+		// );
 
 		// Use the conversion method to optimize the schema
 		const optimizedSchema = this.convertZodToOpenAI(originalSchema);
 
-		console.debug(
-			`---->SchemaOptimizer createOptimizedJsonSchema optimizedSchema:${JSON.stringify(
-				optimizedSchema,
-				null,
-				2,
-			)}`,
-		);
+		// console.debug(
+		// 	`---->SchemaOptimizer createOptimizedJsonSchema optimizedSchema:${JSON.stringify(
+		// 		optimizedSchema,
+		// 		null,
+		// 		2,
+		// 	)}`,
+		// );
 		return optimizedSchema;
 	}
 
@@ -83,6 +83,40 @@ export class SchemaOptimizer {
 		// Convert number to integer where appropriate
 		if (schema.type === "number") {
 			schema.type = "integer";
+		}
+
+		// Handle empty objects without type - add default type for OpenAI strict mode
+		if (
+			!schema.type &&
+			typeof schema === "object" &&
+			!schema.anyOf &&
+			!Array.isArray(schema)
+		) {
+			// If it's an empty object or object without properties, make it a generic object
+			if (!schema.properties || Object.keys(schema.properties).length === 0) {
+				schema.type = "object";
+				if (!schema.additionalProperties) {
+					schema.additionalProperties = false;
+				}
+				if (!schema.required) {
+					schema.required = [];
+				}
+			} else {
+				// If it has properties but no type, assume it's an object
+				schema.type = "object";
+			}
+		}
+
+		// Special handling for z.unknown() types - OpenAI strict mode requires explicit types
+		// z.unknown() typically generates empty objects without type, so we make them flexible objects
+		if (
+			!schema.type &&
+			!schema.anyOf &&
+			!schema.properties &&
+			Object.keys(schema).length === 0
+		) {
+			schema.type = "object";
+			schema.additionalProperties = true;
 		}
 
 		// Handle root level schema - add thinking to required if it exists
@@ -140,17 +174,40 @@ export class SchemaOptimizer {
 			}
 		}
 
-		// OpenAI strict mode: when additionalProperties: false, all properties must be required
+		// OpenAI strict mode: when additionalProperties: false, add properties to required
+		// BUT exclude empty objects (those with no properties or empty required array)
 		if (
 			schema.type === "object" &&
 			schema.additionalProperties === false &&
-			schema.properties &&
-			schema.required
+			schema.properties
 		) {
 			const allPropertyKeys = Object.keys(schema.properties);
-			const missingRequired = allPropertyKeys.filter(
+
+			// Initialize required array if it doesn't exist
+			if (!schema.required) {
+				schema.required = [];
+			}
+
+			// Filter out properties that are empty objects (don't require them)
+			const validPropertyKeys = allPropertyKeys.filter((key) => {
+				const prop = schema.properties![key];
+				// Don't require empty objects or objects with no meaningful properties
+				if (
+					prop &&
+					prop.type === "object" &&
+					prop.additionalProperties === false
+				) {
+					return prop.properties && Object.keys(prop.properties).length > 0;
+				}
+				return true; // Include all other types
+			});
+
+			// Find missing required properties (only for valid ones)
+			const missingRequired = validPropertyKeys.filter(
 				(key) => !schema.required!.includes(key),
 			);
+
+			// Add missing properties to required array
 			if (missingRequired.length > 0) {
 				schema.required = [...schema.required, ...missingRequired];
 			}
