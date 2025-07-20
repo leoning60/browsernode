@@ -34,6 +34,14 @@
 		"./llm": {
 			"types": "./dist/llm/index.d.ts",
 			"import": "./dist/llm/index.js"
+		},
+		"./browser": {
+			"types": "./dist/browser/index.d.ts",
+			"import": "./dist/browser/index.js"
+		},
+		"./browser/types": {
+			"types": "./dist/browser/types.d.ts",
+			"import": "./dist/browser/types.js"
 		}
 	},
 	"files": ["dist", "README.md", "LICENSE"],
