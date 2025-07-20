@@ -90,12 +90,17 @@ export class Controller<T = Context> {
 	 */
 	private registerDoneAction(outputModel: any) {
 		if (outputModel !== null) {
+			const CustomizedOutputModelAction = StructuredOutputAction.extend({
+				data: outputModel,
+			});
 			this.registry.action(
 				"Complete task - with return text and if the task is finished (success=True) or not yet completely finished (success=False), because last step is reached",
 				{
-					paramModel: StructuredOutputAction,
+					paramModel: CustomizedOutputModelAction,
 				},
-			)(async function done(params: z.infer<typeof StructuredOutputAction>) {
+			)(async function done(
+				params: z.infer<typeof CustomizedOutputModelAction>,
+			) {
 				return new ActionResult({
 					isDone: true,
 					success: params.success,
