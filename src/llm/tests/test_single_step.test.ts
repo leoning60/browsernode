@@ -36,7 +36,7 @@ class MockChatOllama {
 	}
 }
 
-// Mock interfaces to replace Python imports
+// Mock interfaces
 interface DOMElementNode {
 	tag_name: string;
 	xpath: string;

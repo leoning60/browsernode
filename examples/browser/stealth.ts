@@ -42,11 +42,9 @@ async function main() {
 	// Default Playwright Chromium Browser
 	const normalBrowserSession = new BrowserSession({
 		browserProfile: new BrowserProfile({
-			userDataDir: undefined, // equivalent to None in Python
+			userDataDir: undefined,
 			headless: false,
 			stealth: false,
-			// Note: browsernode doesn't have direct equivalents for all Python settings
-			// deterministicRendering and disableSecurity are handled differently
 		}),
 	});
 
@@ -121,7 +119,7 @@ async function main() {
 				executablePath: bravePath,
 				headless: false,
 				disableSecurity: false,
-				userDataDir: undefined, // equivalent to None in Python
+				userDataDir: undefined,
 				deterministicRendering: false,
 				stealth: true,
 			}),

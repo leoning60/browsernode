@@ -23,7 +23,7 @@ const logger: Logger = bnLogger.child({
 //use a non-default port to avoid conflicts with other tools / devs using 9222
 export const CHROME_DEBUG_PORT = 9242;
 
-// Chrome disabled components (equivalent to Python CHROME_DISABLED_COMPONENTS)
+// Chrome disabled components
 export const CHROME_DISABLED_COMPONENTS = [
 	// Playwright defaults: https://github.com/microsoft/playwright/blob/41008eeddd020e2dee1c540f7c0cdfa337e99637/packages/playwright-core/src/server/chromium/chromiumSwitches.ts#L76
 	// AcceptCHFrame,AutoExpandDetailsElement,AvoidUnnecessaryBeforeUnloadCheckSync,CertificateTransparencyComponentUpdater,DeferRendererTasksAfterInput,DestroyProfileOnBrowserClose,DialMediaRouteProvider,ExtensionManifestV2Disabled,GlobalMediaControls,HttpsUpgrades,ImprovedCookieControls,LazyFrameLoading,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate
@@ -342,7 +342,7 @@ export interface BrowserContextArgs {
 	 * Base model for common browser context parameters used by
 	 * both BrowserType.newContext() and BrowserType.launchPersistentContext().
 	 *
-	 * https://playwright.dev/python/docs/api/class-browser#browser-new-context
+	 * https://playwright.dev/docs/api/class-browser#browser-new-context
 	 */
 	// Browser context parameters
 	acceptDownloads?: boolean;
@@ -620,7 +620,6 @@ export class BrowserProfile implements BrowserProfileOptions {
 
 	private copyOldConfigNamesToNew(): void {
 		// Handle deprecated window_width/window_height properties
-		// This matches the Python model validator copy_old_config_names_to_new
 		const hasDeprecatedProps =
 			(this as any).windowWidth || (this as any).windowHeight;
 		if (hasDeprecatedProps) {
@@ -816,11 +815,10 @@ export class BrowserProfile implements BrowserProfileOptions {
 		return finalArgsList;
 	}
 
+	/**
+	 * Convert list of CLI args to a dictionary for deduplication and merging.
+	 */
 	private argsAsDict(args: string[]): Record<string, string> {
-		/**
-		 * Convert list of CLI args to a dictionary for deduplication and merging.
-		 * This matches the Python BrowserLaunchArgs.args_as_dict() method.
-		 */
 		const argsDict: Record<string, string> = {};
 		for (const arg of args) {
 			const [key, value = ""] = arg.split("=", 2);
@@ -831,11 +829,10 @@ export class BrowserProfile implements BrowserProfileOptions {
 		return argsDict;
 	}
 
+	/**
+	 * Convert dictionary of CLI args back to a list.
+	 */
 	private argsAsList(args: Record<string, string>): string[] {
-		/**
-		 * Convert dictionary of CLI args back to a list.
-		 * This matches the Python BrowserLaunchArgs.args_as_list() method.
-		 */
 		return Object.entries(args).map(([key, value]) =>
 			value
 				? `--${key.replace(/^--/, "")}=${value}`
@@ -843,7 +840,7 @@ export class BrowserProfile implements BrowserProfileOptions {
 		);
 	}
 
-	// Static utility methods matching Python version
+	// Static utility methods
 	public static argsAsDict(args: string[]): Record<string, string> {
 		const argsDict: Record<string, string> = {};
 		for (const arg of args) {

@@ -82,7 +82,7 @@ export async function createHistoryGif(
 
 	const images: Buffer[] = [];
 
-	// Try to load nicer fonts with fallback logic similar to Python version
+	// Try to load nicer fonts with fallback
 	let regularFont!: FreeTypeFont;
 	let titleFont!: FreeTypeFont;
 	let goalFont!: FreeTypeFont;
@@ -259,7 +259,7 @@ async function createTaskFrame(
 	const centerY = metadata.height! / 2;
 
 	// Draw task text with dynamic font size based on task length
-	const margin = 140; // Increased margin like Python version
+	const margin = 140; // Increased margin
 	const maxWidth = metadata.width! - 2 * margin;
 
 	// Dynamic font size calculation based on task length
@@ -301,7 +301,7 @@ async function createTaskFrame(
 	// Add logo and text overlay
 	const compositeInputs: sharp.OverlayOptions[] = [];
 
-	// Add logo if available (top right corner like Python version)
+	// Add logo if available (top right corner)
 	if (logo) {
 		const logoMetadata = await sharp(logo).metadata();
 		const logoMargin = 20;

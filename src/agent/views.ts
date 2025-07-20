@@ -20,7 +20,7 @@ import bnLogger from "../logging_config";
 import type { UsageSummary } from "../tokens/views";
 import { MessageManagerState } from "./message_manager/views";
 
-// Generic type for structured output, equivalent to Python's TypeVar('AgentStructuredOutput', bound=BaseModel)
+// Generic type for structured output
 type AgentStructuredOutput<
 	T extends Record<string, any> = Record<string, any>,
 > = T;

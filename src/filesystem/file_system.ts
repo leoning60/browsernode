@@ -533,7 +533,7 @@ export class FileSystem {
 	}
 }
 
-// Test functions for development (equivalent to Python's if __name__ == '__main__')
+// Test functions for development
 export async function testFileSystem(): Promise<void> {
 	// Test to understand what toObject() does
 	const mdFile = new MarkdownFile("test");

@@ -201,37 +201,6 @@ export function modelCopyDeep<T extends Record<string, any>>(
 }
 
 /**
- * Example usage of modelCopy function
- *
- * // Original usage in Python:
- * // self.browser_profile = self.browser_profile.model_copy(update=profile_overrides)
- *
- * // TypeScript equivalent:
- * // this.browserProfile = modelCopy(this.browserProfile, profileOverrides);
- *
- * // Example with interface:
- * interface BrowserProfile {
- *   headless: boolean;
- *   userAgent: string;
- *   viewport: { width: number; height: number };
- * }
- *
- * const originalProfile: BrowserProfile = {
- *   headless: true,
- *   userAgent: "Mozilla/5.0...",
- *   viewport: { width: 1920, height: 1080 }
- * };
- *
- * const overrides = {
- *   headless: false,
- *   viewport: { width: 1366, height: 768 }
- * };
- *
- * const updatedProfile = modelCopy(originalProfile, overrides);
- * // Result: { headless: false, userAgent: "Mozilla/5.0...", viewport: { width: 1366, height: 768 } }
- */
-
-/**
  * Utility type for ensuring type safety when using modelCopy
  */
 export type ModelCopyUpdate<T> = Partial<T>;

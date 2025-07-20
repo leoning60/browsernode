@@ -3,7 +3,6 @@ import type { ChatInvokeCompletion } from "./views";
 
 /**
  * Base interface for chat models
- * Converted from Python Protocol to TypeScript interface
  */
 export interface BaseChatModel {
 	/** Whether API keys have been verified */

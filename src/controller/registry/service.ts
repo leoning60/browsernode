@@ -617,7 +617,6 @@ export class Registry<Context = any> {
 		}
 
 		// Create action model with available actions
-		// In TypeScript, we can't create true Union types dynamically like Python,
 		// but we can create an ActionModel that contains only the available actions
 		const actionModelData: Record<string, any> = {};
 

@@ -237,8 +237,6 @@ export class SignalHandler {
 	 * Cancel current tasks that should be interruptible
 	 */
 	private cancelInterruptibleTasks(): void {
-		// In Node.js, we don't have the same task cancellation mechanism as Python asyncio
-		// This would need to be implemented based on the specific task management system
 		// For now, we'll emit events that can be listened to
 		this.loop.emit("cancelInterruptibleTasks", this.interruptibleTaskPatterns);
 	}

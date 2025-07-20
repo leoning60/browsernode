@@ -99,7 +99,6 @@ function registerShutdownHooks(): void {
 
 	/**
 	 * Shutdown function for playwright instances
-	 * TypeScript equivalent of Python's shutdown_playwright() function
 	 */
 	const shutdownPlaywright = async (): Promise<void> => {
 		// Shutdown playwright instance
@@ -113,7 +112,7 @@ function registerShutdownHooks(): void {
 				// We set to null to help with garbage collection and prevent further use
 				globalPlaywrightApiObject = null;
 			} catch (error: any) {
-				// Ignore errors during shutdown (equivalent to Python's pass in except block)
+				// Ignore errors during shutdown
 				logger.debug(`Error during playwright shutdown: ${error.message}`);
 			}
 		}
@@ -126,7 +125,7 @@ function registerShutdownHooks(): void {
 				);
 				globalPatchrightApiObject = null;
 			} catch (error: any) {
-				// Ignore errors during shutdown (equivalent to Python's pass in except block)
+				// Ignore errors during shutdown
 				logger.debug(`Error during patchright shutdown: ${error.message}`);
 			}
 		}
@@ -151,7 +150,7 @@ function registerShutdownHooks(): void {
 	};
 
 	// Register shutdown hooks for various exit scenarios
-	// beforeExit allows async operations (equivalent to Python's atexit)
+	// beforeExit allows async operations
 	process.on("beforeExit", async () => {
 		await shutdownPlaywright();
 	});
@@ -189,9 +188,9 @@ function registerShutdownHooks(): void {
 }
 
 /**
- * Global FinalizationRegistry for automatic cleanup - TypeScript equivalent of Python's __del__ method
+ * Global FinalizationRegistry for automatic cleanup
  *
- * In Python, __del__ is called when an object is garbage collected, allowing for automatic cleanup.
+ * __del__ is called when an object is garbage collected, allowing for automatic cleanup.
  * In TypeScript/JavaScript, FinalizationRegistry provides similar functionality, though it's not
  * guaranteed to run and should not be relied upon for critical cleanup.
  *
@@ -409,7 +408,6 @@ export class BrowserSession extends EventEmitter {
 		this.applySessionOverridesToProfile(options);
 
 		// Register with FinalizationRegistry for automatic cleanup
-		// This is the closest equivalent to Python's __del__ method
 		browserSessionFinalizationRegistry.register(this, {
 			id: this.id,
 			browserPid: this.browserPid,
@@ -781,7 +779,6 @@ export class BrowserSession extends EventEmitter {
 
 	/**
 	 * This method handles garbage collection cleanup logic.
-	 * TypeScript doesn't have destructors like Python's __del__, but we can provide
 	 * a cleanup method that should be called when the session is no longer needed.
 	 */
 	public finalize(): void {
@@ -872,7 +869,7 @@ export class BrowserSession extends EventEmitter {
 	private async _startGlobalPlaywrightSubprocess(
 		isStealth: boolean,
 	): Promise<PlaywrightOrPatchrightChromium> {
-		// Register shutdown hooks when creating playwright instances (equivalent to Python's atexit.register)
+		// Register shutdown hooks when creating playwright instances
 		registerShutdownHooks();
 
 		if (isStealth) {
@@ -1769,11 +1766,10 @@ export class BrowserSession extends EventEmitter {
 		await this.addInitScripts();
 	}
 
+	/**
+	 * Get PIDs of all current child processes (recursive)
+	 */
 	private async getChildProcessPids(): Promise<Set<number>> {
-		/**
-		 * Get PIDs of all current child processes (recursive)
-		 * TypeScript equivalent of Python's psutil.Process(os.getpid()).children(recursive=True)
-		 */
 		try {
 			const platform = os.platform();
 
@@ -1866,11 +1862,10 @@ export class BrowserSession extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Search for potentially conflicting local processes running on the same userDataDir
+	 */
 	private async checkForConflictingProcesses(): Promise<void> {
-		/**
-		 * Search for potentially conflicting local processes running on the same user_data_dir
-		 * TypeScript equivalent of Python's psutil.process_iter(['pid', 'cmdline']) check
-		 */
 		if (!this.browserProfile.userDataDir) return;
 
 		try {
@@ -1940,11 +1935,10 @@ export class BrowserSession extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Launch persistent context with retry and timeout handling
+	 */
 	private async launchPersistentContextWithRetry(): Promise<void> {
-		/**
-		 * Launch persistent context with retry and timeout handling
-		 * TypeScript equivalent of Python's asyncio.timeout() and retry logic
-		 */
 		if (!this.chromium) {
 			throw new Error("chromium instance is null");
 		}
@@ -1952,7 +1946,7 @@ export class BrowserSession extends EventEmitter {
 		const timeoutMs = this.browserProfile.defaultTimeout || 30000;
 
 		try {
-			// Try launch with timeout (equivalent to Python's asyncio.timeout)
+			// Try launch with timeout
 			const timeoutPromise = new Promise<never>((_, reject) => {
 				global.setTimeout(() => reject(new Error("Launch timeout")), timeoutMs);
 			});
@@ -1982,7 +1976,7 @@ export class BrowserSession extends EventEmitter {
 					fs.unlinkSync(singletonLock);
 				}
 
-				// Wait a moment for cleanup (equivalent to Python's asyncio.sleep(0.1))
+				// Wait a moment for cleanup
 				await setTimeout(100);
 
 				// Retry the launch
@@ -2406,7 +2400,7 @@ export class BrowserSession extends EventEmitter {
 
 		if (pages.length > 0) {
 			foregroundPage = pages[0];
-			// Generate a simple hash-based identifier for the page (similar to Python's id())
+			// Generate a simple hash-based identifier for the page
 			const pageId = foregroundPage
 				? Math.abs(
 						foregroundPage
