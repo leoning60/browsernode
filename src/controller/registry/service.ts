@@ -189,6 +189,13 @@ export class Registry<Context = any> {
 								throw new Error(
 									`Action ${func.name} requires availableFilePaths but none provided.`,
 								);
+							} else if (
+								param === "sensitiveData" ||
+								param === "hasSensitiveData" ||
+								param === "context"
+							) {
+								// These parameters are optional and can be null/undefined
+								// Allow them to be passed as null/undefined
 							} else {
 								throw new Error(
 									`${func.name}() missing required special parameter '${param}'`,
