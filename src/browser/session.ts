@@ -2406,8 +2406,22 @@ export class BrowserSession extends EventEmitter {
 
 		if (pages.length > 0) {
 			foregroundPage = pages[0];
+			// Generate a simple hash-based identifier for the page (similar to Python's id())
+			const pageId = foregroundPage
+				? Math.abs(
+						foregroundPage
+							.url()
+							.split("")
+							.reduce((a, b) => {
+								a = (a << 5) - a + b.charCodeAt(0);
+								return a & a;
+							}, 0),
+					)
+						.toString(16)
+						.slice(-2)
+				: "??";
 			this.logger.debug(
-				`👁️‍🗨️ Found ${pages.length} existing tabs in browser, Agent 🅰 ${this.id.slice(-4)}.${this.agentCurrentPage?.toString().slice(-2) || "??"} will start focused on tab 🄿 [${pages.indexOf(foregroundPage as any)}]: ${foregroundPage?.url() || "unknown"}`,
+				`👁️‍🗨️ Found ${pages.length} existing tabs in browser, Agent 🅰 ${this.id.slice(-4)}.${pageId} will start focused on tab 🄿 [${pages.indexOf(foregroundPage as any)}]: ${foregroundPage?.url() || "unknown"}`,
 			);
 		} else {
 			foregroundPage = await this.browserContext.newPage();
