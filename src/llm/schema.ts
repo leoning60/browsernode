@@ -2,6 +2,9 @@
  * Utilities for creating optimized JSON schemas for LLM usage
  */
 
+import type { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
+
 interface JsonSchema {
 	type?: string;
 	properties?: Record<string, JsonSchema>;
@@ -14,48 +17,55 @@ interface JsonSchema {
 	default?: any;
 	minItems?: number;
 	$schema?: string;
+	$defs?: Record<string, JsonSchema>;
+	$ref?: string;
 	[key: string]: any;
 }
 
 export class SchemaOptimizer {
 	/**
-	 * Create the most optimized schema by flattening all $ref/$defs while preserving
-	 * FULL descriptions and ALL action definitions. Also ensures OpenAI strict mode compatibility.
+	 * Create the most optimized schema by converting Zod schemas to OpenAI-compatible JSON schemas
+	 * while preserving FULL descriptions and ALL action definitions. Also ensures OpenAI strict mode compatibility.
 	 *
-	 * @param model - The class/type to optimize (should have a way to generate JSON schema)
+	 * @param model - The Zod schema to optimize
 	 * @returns Optimized schema with all $refs resolved and strict mode compatibility
 	 */
 	static createOptimizedJsonSchema(model: any): Record<string, any> {
 		// Validate input - should not be undefined or null
 		if (model === undefined || model === null) {
 			throw new Error(
-				`--->SchemaOptimizer.createOptimizedJsonSchema() received ${model === null ? "null" : "undefined"} model. A valid class constructor is required.`,
+				`--->SchemaOptimizer.createOptimizedJsonSchema() received ${model === null ? "null" : "undefined"} model. A valid Zod schema is required.`,
 			);
 		}
 
-		// Generate original schema - this assumes the model has a method to generate JSON schema
-		// In practice, you might need to use a library like @apidevtools/json-schema-ref-parser
-		// or implement your own schema generation logic
-		const originalSchema = this.generateSchemaFromModel(model);
-		// console.debug(
-		// 	`---->SchemaOptimizer createOptimizedJsonSchema originalSchema:${JSON.stringify(
-		// 		originalSchema,
-		// 		null,
-		// 		2,
-		// 	)}`,
-		// );
+		try {
+			// Generate original schema from various input types
+			const originalSchema = this.generateSchemaFromZod(model);
+			// console.debug(
+			// 	`---->SchemaOptimizer createOptimizedJsonSchema originalSchema:${JSON.stringify(
+			// 		originalSchema,
+			// 		null,
+			// 		2,
+			// 	)}`,
+			// );
 
-		// Use the conversion method to optimize the schema
-		const optimizedSchema = this.convertZodToOpenAI(originalSchema);
+			// Use the conversion method to optimize the schema
+			const optimizedSchema = this.convertZodToOpenAI(originalSchema);
 
-		// console.debug(
-		// 	`---->SchemaOptimizer createOptimizedJsonSchema optimizedSchema:${JSON.stringify(
-		// 		optimizedSchema,
-		// 		null,
-		// 		2,
-		// 	)}`,
-		// );
-		return optimizedSchema;
+			// console.debug(
+			// 	`---->SchemaOptimizer createOptimizedJsonSchema optimizedSchema:${JSON.stringify(
+			// 		optimizedSchema,
+			// 		null,
+			// 		2,
+			// 	)}`,
+			// );
+			return optimizedSchema;
+		} catch (error) {
+			console.error(`Failed to generate optimized JSON schema:`, error);
+			throw new Error(
+				`Failed to generate optimized JSON schema: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 	}
 
 	/**
@@ -71,10 +81,130 @@ export class SchemaOptimizer {
 			delete optimized.$schema;
 		}
 
+		// First, resolve all $refs to avoid nested reference issues
+		this.resolveRefsInline(optimized);
+
+		// Then optimize the schema
 		this.optimizeSchemaRecursive(optimized);
 
 		// Reorder properties to match OpenAI preference
 		return this.reorderProperties(optimized);
+	}
+
+	/**
+	 * Generate JSON schema from various input types
+	 * @param model - The schema/model to convert
+	 * @returns JSON schema object
+	 */
+	private static generateSchemaFromZod(model: any): JsonSchema {
+		// Check if the input is a valid Zod schema
+		if (model && typeof model === "object" && model._def) {
+			// Use zod-to-json-schema to convert Zod schema to JSON schema
+			const jsonSchema = zodToJsonSchema(model, {
+				// Use target draft-7 for better OpenAI compatibility
+				target: "jsonSchema7",
+				// Avoid $refs by inlining everything
+				$refStrategy: "none",
+				// Ensure proper property names
+				nameStrategy: "title",
+			}) as JsonSchema;
+			return jsonSchema;
+		}
+
+		// Fallback: check for other schema formats
+		if (typeof model === "function" && model.getJsonSchema) {
+			return model.getJsonSchema();
+		}
+
+		if (typeof model === "object" && model.schema) {
+			return model.schema;
+		}
+
+		// If it's already a JSON schema object, return it
+		if (
+			model &&
+			typeof model === "object" &&
+			(model.type || model.properties || model.anyOf)
+		) {
+			return model;
+		}
+
+		throw new Error(
+			`Invalid schema provided. Expected a Zod schema, class with getJsonSchema method, or JSON schema object. Received: ${typeof model}`,
+		);
+	}
+
+	/**
+	 * Resolve all $refs inline to avoid nested reference issues that OpenAI doesn't support
+	 * @param schema - The schema to process
+	 * @param defs - The definitions object containing referenced schemas
+	 */
+	private static resolveRefsInline(
+		schema: JsonSchema,
+		defs?: Record<string, JsonSchema>,
+	): void {
+		if (!schema || typeof schema !== "object") return;
+
+		// Get the definitions from the root if available
+		if (!defs && schema.$defs) {
+			defs = schema.$defs;
+			// Remove $defs from root after capturing it
+			delete schema.$defs;
+		}
+
+		// If this schema has a $ref, resolve it inline
+		if (schema.$ref && defs) {
+			const refPath = schema.$ref
+				.replace("#/$defs/", "")
+				.replace("#/definitions/", "");
+			const referencedSchema = defs[refPath];
+
+			if (referencedSchema) {
+				// Copy all properties from referenced schema to current schema
+				Object.keys(referencedSchema).forEach((key) => {
+					if (key !== "$ref") {
+						schema[key] = this.deepClone(referencedSchema[key]);
+					}
+				});
+				// Remove the $ref since we've inlined it
+				delete schema.$ref;
+
+				// Recursively resolve any refs in the inlined schema
+				this.resolveRefsInline(schema, defs);
+			}
+		}
+
+		// Recursively process nested schemas
+		if (schema.properties) {
+			Object.keys(schema.properties).forEach((key) => {
+				const prop = schema.properties![key];
+				if (prop) {
+					this.resolveRefsInline(prop, defs);
+				}
+			});
+		}
+
+		if (schema.items) {
+			this.resolveRefsInline(schema.items, defs);
+		}
+
+		if (schema.anyOf) {
+			schema.anyOf.forEach((subSchema) => {
+				this.resolveRefsInline(subSchema, defs);
+			});
+		}
+
+		if (schema.oneOf) {
+			(schema as any).oneOf.forEach((subSchema: JsonSchema) => {
+				this.resolveRefsInline(subSchema, defs);
+			});
+		}
+
+		if (schema.allOf) {
+			(schema as any).allOf.forEach((subSchema: JsonSchema) => {
+				this.resolveRefsInline(subSchema, defs);
+			});
+		}
 	}
 
 	private static optimizeSchemaRecursive(schema: JsonSchema): void {
@@ -295,43 +425,5 @@ export class SchemaOptimizer {
 			cloned[key] = this.deepClone(obj[key]);
 		});
 		return cloned;
-	}
-
-	/**
-	 * Generate a JSON schema from a model/type
-	 * This is a placeholder implementation - in practice you'd use a proper schema generation library
-	 */
-	private static generateSchemaFromModel(model: any): Record<string, any> {
-		// Validate input
-		if (model === undefined || model === null) {
-			throw new Error(
-				`--->generateSchemaFromModel() received ${model === null ? "null" : "undefined"} model. Cannot generate schema from invalid input.`,
-			);
-		}
-
-		// This is a simplified implementation
-		// In practice, you'd integrate with libraries like:
-		// - @apidevtools/json-schema-ref-parser
-		// - typescript-json-schema
-		// - Or use runtime type information from decorators/metadata
-
-		if (typeof model === "function" && model.getJsonSchema) {
-			return model.getJsonSchema();
-		}
-
-		if (typeof model === "object" && model.schema) {
-			return model.schema;
-		}
-		// Fallback to basic object schema
-		// return {
-		//   type: "object",
-		//   properties: {},
-		//   required: [],
-		//   additionalProperties: false,
-		// };
-		// If we reach here, the model doesn't have expected schema generation capabilities
-		throw new Error(
-			`--->generateSchemaFromModel() received invalid model type: ${typeof model}. Expected a class constructor with getJsonSchema method or an object with schema property.`,
-		);
 	}
 }
