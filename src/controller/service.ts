@@ -628,14 +628,17 @@ export class Controller<T = Context> {
 1. The query is vague
 2. Does not make sense for the page
 3. Some/all of the information is not available
+4. The page is not relevant to the query
 
 Explain the content of the page and that the requested information is not available in the page. Respond in JSON format.
 Query: ${params.query}
 Website:
 ${content}`;
-
 			try {
 				const userMessage = createUserMessage(prompt);
+				// logger.debug(
+				// 	`---->extractStructuredData userMessage: ${userMessage} <----`,
+				// );
 				const response = await pageExtractionLlm.ainvoke([userMessage]);
 
 				const extractedContent = `Page Link: ${page.url()}\nQuery: ${params.query}\nExtracted Content:\n${response.completion}`;
