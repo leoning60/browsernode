@@ -93,7 +93,7 @@ export class LangChainMessageSerializer {
 		return textParts.join("\n");
 	}
 
-	/**Convert browser-use ToolCall to LangChain ToolCall.*/
+	/**Convert browsernode ToolCall to LangChain ToolCall.*/
 	private static _serializeToolCall(toolCall: ToolCall): LangChainToolCall {
 		// Parse the arguments string to a dict for LangChain
 		let argsDict: Record<string, any>;
