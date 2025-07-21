@@ -3,7 +3,7 @@
  * browser usage data for analysis, with both server and client
  * components working together to record and store the information.
  *
- * Adapted from Python version by Carlos A. Planchón
+ * Adapted from Carlos A. Planchón
  * https://github.com/carlosplanchon/
  *
  * Author: BrowserNode Team
