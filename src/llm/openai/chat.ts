@@ -1,20 +1,26 @@
-// Import OpenAI types
 import { APIConnectionError, APIError, OpenAI, RateLimitError } from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
 import type { ChatModel } from "openai/resources/shared";
 import type { ReasoningEffort } from "openai/resources/shared";
 import type { ResponseFormatJSONSchema } from "openai/resources/shared";
 import { z } from "zod";
+// Import OpenAI types
+import { zodToJsonSchema } from "zod-to-json-schema";
 // import { Client as UndiciClient } from "undici";
 
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { modelValidateJson } from "../../bn_utils";
+import bnLogger from "../../logging_config";
 import type { BaseChatModel } from "../base";
 import { ModelProviderError } from "../exceptions";
 import type { BaseMessage } from "../messages";
 import { SchemaOptimizer } from "../schema";
 import type { ChatInvokeCompletion, ChatInvokeUsage } from "../views";
 import { OpenAIMessageSerializer } from "./serializer";
+
+const logger = bnLogger.child({
+	module: "browsernode/llm/openai/chat",
+});
 
 type JSONSchema = ResponseFormatJSONSchema.JSONSchema;
 
@@ -183,7 +189,7 @@ export class ChatOpenAI implements BaseChatModel {
 	 * @param messages
 	 * 	List of chat messages
 	 * @param outputFormat
-	 * 	Optional Pydantic model class for structured output
+	 * 	Optional Zod model class for structured output
 	 * @returns
 	 * 	Either a string response or an instance of output_format
 	 */
@@ -191,6 +197,9 @@ export class ChatOpenAI implements BaseChatModel {
 		messages: BaseMessage[],
 		outputFormat?: (new (...args: any[]) => T) | undefined,
 	): Promise<ChatInvokeCompletion<T> | ChatInvokeCompletion<string>> {
+		logger.debug(
+			`---->ChatOpenAI ainvoke outputFormat:${outputFormat ? `[Function: ${outputFormat.name || "anonymous"}]` : "undefined"}`,
+		);
 		const openaiMessages: ChatCompletionMessageParam[] =
 			OpenAIMessageSerializer.serializeMessages(messages);
 		try {
@@ -198,6 +207,11 @@ export class ChatOpenAI implements BaseChatModel {
 			if (ReasoningModels.includes(this.model)) {
 				reasoningEffortDict = { reasoning_effort: this.reasoningEffort };
 			}
+
+			// Debug: Check system message content
+			// logger.debug(
+			// 	`---->ChatOpenAI ainvoke openaiMessages:${JSON.stringify(openaiMessages, null, 2)}`,
+			// );
 
 			if (!outputFormat) {
 				// Return string response
@@ -236,7 +250,13 @@ export class ChatOpenAI implements BaseChatModel {
 					strict: true,
 					schema: SchemaOptimizer.createOptimizedJsonSchema(outputFormat),
 				};
-
+				// console.debug(
+				// 	`---->ChatOpenAI ainvoke json_schema responseFormat:${JSON.stringify(
+				// 		responseFormat,
+				// 		null,
+				// 		2,
+				// 	)}`,
+				// );
 				const response = await this.getClient().chat.completions.create({
 					model: this.model,
 					messages: openaiMessages,

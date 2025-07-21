@@ -3,7 +3,7 @@ import * as path from "path";
 import { Canvas, CanvasRenderingContext2D, createCanvas } from "canvas";
 
 /**
- * Font object that mimics Python PIL ImageFont.FreeTypeFont
+ * Font object that mimics PIL ImageFont.FreeTypeFont
  */
 export class FreeTypeFont {
 	private fontFamily: string;
@@ -77,7 +77,7 @@ export class FreeTypeFont {
 }
 
 /**
- * ImageFont class that mimics Python PIL ImageFont
+ * ImageFont class that mimics PIL ImageFont
  */
 export class ImageFont {
 	private static registeredFonts: Map<string, string> = new Map();
@@ -187,7 +187,7 @@ export type { FreeTypeFont as FreeTypeFontType };
 
 // Example usage:
 /*
-// Similar to Python PIL usage:
+// Similar to PIL usage:
 const regular_font = ImageFont.truetype('Arial', 12);
 const title_font = ImageFont.truetype('Arial', 18);
 const goal_font = ImageFont.truetype('Arial', 14);

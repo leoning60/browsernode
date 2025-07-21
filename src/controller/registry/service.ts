@@ -604,9 +604,9 @@ export class Registry<Context = any> {
 			// Include action if both filters match (or if either is not present)
 			if (domainIsAllowed && pageIsAllowed) {
 				availableActions.set(name, action);
-				logger.debug(
-					`---->createActionModel added action with filters: ${name}`,
-				);
+				// logger.debug(
+				// 	`---->createActionModel added action with filters: ${name}`,
+				// );
 			}
 		}
 
@@ -636,17 +636,17 @@ export class Registry<Context = any> {
 		// 	`---->createActionModel actionModelData: ${JSON.stringify(actionModelData, null, 2)}`,
 		// );
 
-		const result_model = new ActionModel(actionModelData);
+		const resultModel = new ActionModel(actionModelData);
 		// logger.info(
-		// 	`---->createActionModel result_model: ${JSON.stringify(result_model, null, 2)}`,
+		// 	`---->createActionModel resultModel: ${JSON.stringify(resultModel, null, 2)}`,
 		// );
 		// logger.info(
-		// 	`---->createActionModel result_model keys: ${JSON.stringify(Object.keys(result_model))}`,
+		// 	`---->createActionModel resultModel keys: ${JSON.stringify(Object.keys(resultModel))}`,
 		// );
 		logger.info(
-			`---->createActionModel result_model keys length: ${Object.keys(result_model).length}`,
+			`---->createActionModel resultModel keys length: ${Object.keys(resultModel).length}`,
 		);
-		return result_model;
+		return resultModel;
 	}
 
 	/**

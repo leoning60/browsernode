@@ -65,25 +65,6 @@ let shutdownHooksRegistered = false;
 
 /**
  * Register a shutdown hook to stop the shared global playwright node.js client when the program exits
- * TypeScript equivalent of Python's atexit.register(shutdown_playwright)
- *
- * Python version:
- * ```python
- * def shutdown_playwright():
- *     if not self.playwright:
- *         return
- *     try:
- *         loop = asyncio.get_running_loop()
- *         self.logger.debug('🛑 Shutting down shared global playwright node.js client')
- *         task = loop.create_task(self.playwright.stop())
- *         if hasattr(task, '_log_destroy_pending'):
- *             task._log_destroy_pending = False
- *     except Exception:
- *         pass
- *     self.playwright = None
- *
- * atexit.register(shutdown_playwright)
- * ```
  *
  * TypeScript differences:
  * - Uses process.on() events instead of atexit.register()

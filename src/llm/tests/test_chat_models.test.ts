@@ -18,7 +18,6 @@ import type {
 	ContentPartTextParam,
 } from '../messages';
 
-// Native TypeScript interface to replace pydantic CapitalResponse
 interface CapitalResponse {
 	/** Structured response for capital question */
 	country: string;

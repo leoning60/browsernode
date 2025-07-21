@@ -40,7 +40,7 @@ export const DoneAction = z.object({
 // StructuredOutputAction - Generic type will be handled at usage
 export const StructuredOutputAction = z.object({
 	success: z.boolean().default(true),
-	data: z.any(), // Will be typed specifically when used
+	data: z.unknown(), // Will be typed specifically when used
 });
 
 // SavePdfAction empty

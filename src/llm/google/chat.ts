@@ -219,7 +219,7 @@ export class ChatGoogle implements BaseChatModel {
 	 * Invoke the model with the given messages.
 	 *
 	 * @param messages: List of chat messages
-	 * @param outputFormat: Optional Pydantic model class for structured output
+	 * @param outputFormat: Optional Zod model class for structured output
 	 * @returns:
 	 * 	Either a string response or an instance of outputFormat
 	 */

@@ -429,8 +429,8 @@ export interface BrowserLaunchArgs {
 
 export interface BrowserNewContextArgs extends BrowserContextArgs {
 	/**
-	 * Pydantic model for new_context() arguments.
-	 * Extends BaseContextParams with storage_state parameter.
+	 * Model for newContext() arguments.
+	 * Extends BaseContextParams with storageState parameter.
 	 *
 	 * https://playwright.dev/docs/api/class-browser#browser-new-context
 	 */
@@ -1023,7 +1023,6 @@ export class BrowserProfile implements BrowserProfileOptions {
 		};
 	}
 
-	// Python-style method names for compatibility
 	public kwargsForLaunchPersistentContext(): BrowserLaunchPersistentContextArgs {
 		return this.getLaunchPersistentContextArgs();
 	}
