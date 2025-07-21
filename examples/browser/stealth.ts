@@ -64,7 +64,7 @@ async function main() {
 	console.log("\n\nSTEALTH BROWSER (PATCHRIGHT):");
 	const stealthBrowserSession = new BrowserSession({
 		browserProfile: new BrowserProfile({
-			userDataDir: "~/.config/browseruse/profiles/stealth",
+			userDataDir: "~/.config/browsernode/profiles/stealth",
 			stealth: true,
 			headless: false,
 			disableSecurity: false,
@@ -95,7 +95,7 @@ async function main() {
 				executablePath: bravePath,
 				headless: false,
 				disableSecurity: false,
-				userDataDir: "~/.config/browseruse/profiles/brave",
+				userDataDir: "~/.config/browsernode/profiles/brave",
 				deterministicRendering: false,
 			}),
 		});
