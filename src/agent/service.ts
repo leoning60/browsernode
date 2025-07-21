@@ -582,31 +582,31 @@ export class Agent<
 	// Save current file system state to agent state
 	private _setupActionModels(): void {
 		// Initially only include actions with no filters
-		this.logger.info("---->_setupActionModels starting...");
+		// this.logger.info("---->_setupActionModels starting...");
 		this.ActionModel = this.controller.registry.createActionModel();
-		this.logger.info("---->_setupActionModels createActionModel completed");
+		// this.logger.info("---->_setupActionModels createActionModel completed");
 
 		// console.debug("---->_setupActionModels this.settings", this.settings);
 		// Create output model with the dynamic actions
 		if (this.settings.useThinking) {
-			this.logger.info(
-				`---->_setupActionModels useThinking==true this.ActionModel: ${JSON.stringify(this.ActionModel, null, 2)}`,
-			);
-			this.logger.info(
-				`---->_setupActionModels this.ActionModel keys: ${JSON.stringify(Object.keys(this.ActionModel))}`,
-			);
+			// this.logger.info(
+			// 	`---->_setupActionModels useThinking==true this.ActionModel: ${JSON.stringify(this.ActionModel, null, 2)}`,
+			// );
+			// this.logger.info(
+			// 	`---->_setupActionModels this.ActionModel keys: ${JSON.stringify(Object.keys(this.ActionModel))}`,
+			// );
 			this.AgentOutput = AgentOutput.typeWithCustomActions(this.ActionModel);
 		} else {
 			this.AgentOutput = AgentOutput.typeWithCustomActionsNoThinking(
 				this.ActionModel,
 			);
 		}
-		this.logger.info(
-			`---->_setupActionModels this.AgentOutput: ${typeof this.AgentOutput}`,
-		);
-		this.logger.info(
-			`---->_setupActionModels this.AgentOutput: ${this.AgentOutput}`,
-		);
+		// this.logger.info(
+		// 	`---->_setupActionModels this.AgentOutput: ${typeof this.AgentOutput}`,
+		// );
+		// this.logger.info(
+		// 	`---->_setupActionModels this.AgentOutput: ${this.AgentOutput}`,
+		// );
 
 		// Used to force the done action when max_steps is reached
 		this.DoneActionModel = this.controller.registry.createActionModel(["done"]);
@@ -619,10 +619,10 @@ export class Agent<
 				this.DoneActionModel,
 			);
 		}
-		this.logger.info(
-			`---->_setupActionModels this.DoneAgentOutput: ${this.DoneAgentOutput}`,
-		);
-		this.logger.info("---->_setupActionModels completed");
+		// this.logger.info(
+		// 	`---->_setupActionModels this.DoneAgentOutput: ${this.DoneAgentOutput}`,
+		// );
+		// this.logger.info("---->_setupActionModels completed");
 	}
 
 	/**
@@ -1030,12 +1030,12 @@ export class Agent<
 	 */
 	@timeExecution("--getNextAction (agent)")
 	async getNextAction(inputMessages: BaseMessage[]): Promise<AgentOutput> {
-		this.logger.debug(
-			`---->getNextAction inputMessages: ${JSON.stringify(inputMessages, null, 2)}`,
-		);
-		this.logger.debug(
-			`---->getNextAction this.AgentOutput: ${this.AgentOutput}`,
-		);
+		// this.logger.debug(
+		// 	`---->getNextAction inputMessages: ${JSON.stringify(inputMessages, null, 2)}`,
+		// );
+		// this.logger.debug(
+		// 	`---->getNextAction this.AgentOutput: ${this.AgentOutput}`,
+		// );
 
 		// Defensive check: ensure AgentOutput is defined
 		if (!this.AgentOutput) {
@@ -1078,9 +1078,9 @@ export class Agent<
 		);
 
 		// Cut the number of actions to maxActionsPerStep if needed
-		this.logger.debug(
-			`---->getNextAction parsed: ${JSON.stringify(parsed, null, 2)}`,
-		);
+		// this.logger.debug(
+		// 	`---->getNextAction parsed: ${JSON.stringify(parsed, null, 2)}`,
+		// );
 		if (
 			parsed.action &&
 			parsed.action.length > this.settings.maxActionsPerStep
@@ -1858,7 +1858,7 @@ export class Agent<
 				// Create new action instance
 				const newActionData: Record<string, any> = {};
 				newActionData[actionName] = params;
-				return new this.ActionModel(newActionData);
+				return new ActionModel(newActionData);
 			}
 		}
 
@@ -1989,19 +1989,42 @@ export class Agent<
 
 			const paramModel = actionInfo.paramModel;
 
-			// Check if paramModel exists and is constructable
-			if (!paramModel || typeof paramModel !== "function") {
-				throw new Error(`Invalid parameter model for action: ${actionName}`);
+			// Validate parameters using the appropriate param model
+			let validatedParams: any;
+			if (!paramModel) {
+				// No parameter model, use params as-is
+				validatedParams = params;
+			} else if (typeof paramModel.parse === "function") {
+				// paramModel is a Zod schema, use parse method
+				try {
+					validatedParams = paramModel.parse(params);
+				} catch (e) {
+					throw new Error(`Invalid parameters for action ${actionName}: ${e}`);
+				}
+			} else if (
+				paramModel.paramModel &&
+				typeof paramModel.paramModel.parse === "function"
+			) {
+				// paramModel has a nested paramModel property with the actual Zod schema
+				try {
+					validatedParams = paramModel.paramModel.parse(params);
+				} catch (e) {
+					throw new Error(`Invalid parameters for action ${actionName}: ${e}`);
+				}
+			} else if (typeof paramModel === "function") {
+				// paramModel is a constructor function
+				const ParamModelConstructor = paramModel as new (args: any) => any;
+				validatedParams = new ParamModelConstructor(params);
+			} else {
+				throw new Error(
+					`Invalid parameter model type for action: ${actionName}`,
+				);
 			}
-
-			// Create validated parameters using the appropriate param model
-			const ParamModelConstructor = paramModel as new (args: any) => any;
-			const validatedParams = new ParamModelConstructor(params);
 
 			// Create ActionModel instance with the validated parameters
 			const actionModelData: Record<string, any> = {};
 			actionModelData[actionName] = validatedParams;
-			const actionModel = new this.ActionModel(actionModelData);
+			const actionModel = new ActionModel(actionModelData);
 			convertedActions.push(actionModel);
 		}
 
