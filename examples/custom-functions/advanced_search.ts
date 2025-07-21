@@ -26,7 +26,7 @@ import { z } from "zod";
 
 config();
 
-// Zod schemas for Person and PersonList (equivalent to Pydantic models)
+// Zod schemas for Person and PersonList
 const PersonSchema = z.object({
 	name: z.string(),
 	email: z.string().nullable().optional(),
