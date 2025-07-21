@@ -42,6 +42,10 @@
 		"./browser/types": {
 			"types": "./dist/browser/types.d.ts",
 			"import": "./dist/browser/types.js"
+		},
+		"./agent/views": {
+			"types": "./dist/agent/views.d.ts",
+			"import": "./dist/agent/views.js"
 		}
 	},
 	"files": ["dist", "README.md", "LICENSE"],
@@ -64,6 +68,7 @@
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.56.0",
 		"@google/genai": "^1.8.0",
+		"@gradio/client": "^1.15.6",
 		"@langchain/anthropic": "^0.3.21",
 		"@langchain/core": "^0.3.64",
 		"@langchain/google-genai": "^0.2.10",
