@@ -237,7 +237,7 @@ const browserSessionFinalizationRegistry = new FinalizationRegistry(
 				}, 5000);
 			} catch (error: any) {
 				if (error.code !== "ESRCH") {
-					logger.warning(
+					logger.warn(
 						`Error in auto-cleanup: ${error.constructor.name}: ${error.message}`,
 					);
 				}
@@ -252,7 +252,7 @@ const MAX_SCREENSHOT_WIDTH = 1920;
 // Helper function for logging glob warnings
 function logGlobWarning(domain: string, glob: string, logger: any): void {
 	if (!globWarningShown) {
-		logger.warning(
+		logger.warn(
 			`⚠️ Allowing agent to visit ${domain} based on allowedDomains=['${glob}', ...]. Set allowedDomains=['${domain}', ...] explicitly to avoid matching too many domains!`,
 		);
 		globWarningShown = true;
@@ -306,7 +306,7 @@ function requireInitialization(
 				error.name === "TargetClosedError" ||
 				error.message.includes("context or browser has been closed")
 			) {
-				this.logger.warning(
+				this.logger.warn(
 					`✂️ Browser ${this.connectionStr} disconnected before BrowserSession.${propertyName} could run...`,
 				);
 				this.resetConnectionState();
@@ -520,7 +520,7 @@ export class BrowserSession extends EventEmitter {
 
 		// Reset if we were initialized but lost connection
 		if (this.initialized) {
-			this.logger.warning(
+			this.logger.warn(
 				`💔 Browser ${this.connectionStr} has gone away, attempting to reconnect...`,
 			);
 			this.resetConnectionState();
@@ -569,7 +569,7 @@ export class BrowserSession extends EventEmitter {
 			try {
 				await this.saveStorageState();
 			} catch (error: any) {
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Failed to save auth storage state before stopping: ${error.constructor.name}: ${error.message}`,
 				);
 			}
@@ -631,7 +631,7 @@ export class BrowserSession extends EventEmitter {
 				await this._closeBrowser();
 			} catch (error: any) {
 				if (!error.message.includes("browser has been closed")) {
-					this.logger.warning(
+					this.logger.warn(
 						`❌ Error closing browser: ${error.constructor.name}: ${error.message}`,
 					);
 				}
@@ -804,7 +804,7 @@ export class BrowserSession extends EventEmitter {
 			} catch (error: any) {
 				// Never let finalize raise Timeout exceptions
 				if (error.name !== "TimeoutError") {
-					this.logger.warning(
+					this.logger.warn(
 						`Error force-killing browser in BrowserSession.finalize: ${error.constructor.name}: ${error.message}`,
 					);
 				}
@@ -851,13 +851,13 @@ export class BrowserSession extends EventEmitter {
 							`↳ Browser process browserPid=${this.browserPid} not found ${hint}`,
 						);
 					} else {
-						this.logger.warning(
+						this.logger.warn(
 							`Error terminating browser process: ${error.constructor.name}: ${error.message}`,
 						);
 					}
 				}
 			} catch (error: any) {
-				this.logger.warning(
+				this.logger.warn(
 					`Error force-killing browser in BrowserSession._killChildProcesses: ${error.constructor.name}: ${error.message}`,
 				);
 			}
@@ -1020,7 +1020,7 @@ export class BrowserSession extends EventEmitter {
 						`↳ Process browserPid=${this.browserPid} no longer exists`,
 					);
 				} else {
-					this.logger.warning(
+					this.logger.warn(
 						`Error terminating browser process: ${error.constructor.name}: ${error.message}`,
 					);
 				}
@@ -1063,7 +1063,7 @@ export class BrowserSession extends EventEmitter {
 			this.logger.debug(`↳ Force killed browserPid=${pid} after timeout`);
 		} catch (error: any) {
 			if (error.code !== "ESRCH") {
-				this.logger.warning(
+				this.logger.warn(
 					`Failed to force kill browserPid=${pid}: ${error.message}`,
 				);
 			}
@@ -1152,7 +1152,7 @@ export class BrowserSession extends EventEmitter {
 			return screenshotB64;
 		} catch (error: any) {
 			if (error.message.toLowerCase().includes("timeout")) {
-				this.logger.warning(
+				this.logger.warn(
 					"🚨 Screenshot timed out, resetting connection state and restarting browser...",
 				);
 				this.resetConnectionState();
@@ -1284,11 +1284,11 @@ export class BrowserSession extends EventEmitter {
 			process.kill(this.browserPid, 0);
 		} catch (error: any) {
 			if (error.code === "ESRCH") {
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Expected Chrome process with pid=${this.browserPid} not found, unable to (re-)connect`,
 				);
 			} else {
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Error accessing chrome process with pid=${this.browserPid}: ${error.constructor.name}: ${error.message}`,
 				);
 			}
@@ -1301,7 +1301,7 @@ export class BrowserSession extends EventEmitter {
 		try {
 			args = await this.getProcessCommandLine(this.browserPid);
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ Error getting command line for process pid=${this.browserPid}: ${error.constructor.name}: ${error.message}`,
 			);
 			this.browserPid = undefined;
@@ -1963,7 +1963,7 @@ export class BrowserSession extends EventEmitter {
 				error.message.includes("SingletonLock") ||
 				error.message.includes("ProcessSingleton")
 			) {
-				this.logger.warning(
+				this.logger.warn(
 					"⚠️ SingletonLock error detected. Cleaning up and retrying...",
 				);
 
@@ -1985,7 +1985,7 @@ export class BrowserSession extends EventEmitter {
 					modelDump(this.browserProfile.kwargsForLaunchPersistentContext()),
 				);
 			} else if (error.message.includes("Launch timeout")) {
-				this.logger.warning(
+				this.logger.warn(
 					"Browser operation timed out. This may indicate the chromium instance is invalid due to event loop changes. " +
 						"Recreating chromium instance and retrying...",
 				);
@@ -2134,7 +2134,7 @@ export class BrowserSession extends EventEmitter {
 				//   }
 				//   this.setBrowserKeepAlive(false); // close the browser at the end because we launched it
 				// } catch (error: any) {
-				//   this.logger.warning(
+				//   this.logger.warn(
 				//     `Browser process ${this.browserPid} died immediately after launch: ${error.constructor.name}`,
 				this.logger.info(
 					`↳ Spawned browserPid=${this.browserPid} ${logPrettyPath(newChromeProc.executablePath)}`,
@@ -2313,7 +2313,7 @@ export class BrowserSession extends EventEmitter {
 					"Target page, context or browser has been closed",
 				)
 			) {
-				this.logger.warning(
+				this.logger.warn(
 					"⚠️ Browser context was closed before init script could be added",
 				);
 				// Reset connection state since browser is no longer valid
@@ -2328,7 +2328,7 @@ export class BrowserSession extends EventEmitter {
 			this.browserProfile.stealth &&
 			!(this.chromium && this.chromium.constructor.name.includes("Patchright"))
 		) {
-			this.logger.warning(
+			this.logger.warn(
 				"⚠️ Failed to set up stealth mode. Got normal playwright objects as input.",
 			);
 		}
@@ -2522,7 +2522,7 @@ export class BrowserSession extends EventEmitter {
 		try {
 			await this.browserContext.addInitScript(updateTabFocusScript);
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ Failed to register init script for tab focus detection: ${error.message}`,
 			);
 		}
@@ -2599,7 +2599,7 @@ export class BrowserSession extends EventEmitter {
 					this.browserProfile.permissions,
 				);
 			} catch (error: any) {
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Failed to grant browser permissions ${JSON.stringify(this.browserProfile.permissions)}: ${error.constructor.name}: ${error.message}`,
 				);
 			}
@@ -2618,7 +2618,7 @@ export class BrowserSession extends EventEmitter {
 				);
 			}
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ Failed to set playwright timeout settings ` +
 					`cdpApi=${this.browserProfile.defaultTimeout} ` +
 					`navigation=${this.browserProfile.defaultNavigationTimeout}: ${error.constructor.name}: ${error.message}`,
@@ -2632,7 +2632,7 @@ export class BrowserSession extends EventEmitter {
 					this.browserProfile.extraHTTPHeaders,
 				);
 			} catch (error: any) {
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Failed to setup playwright extraHTTPHeaders: ${error.constructor.name}: ${error.message}`,
 				); // dont print the secret header contents in the logs!
 			}
@@ -2645,7 +2645,7 @@ export class BrowserSession extends EventEmitter {
 					this.browserProfile.geolocation,
 				);
 			} catch (error: any) {
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Failed to update browser geolocation ${JSON.stringify(this.browserProfile.geolocation)}: ${error.constructor.name}: ${error.message}`,
 				);
 			}
@@ -2724,7 +2724,7 @@ export class BrowserSession extends EventEmitter {
 				// Both methods failed
 			}
 
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ Failed to resize browser window to ${logSize(this.browserProfile.windowSize)} using CDP setWindowBounds: ${error.constructor.name}: ${error.message}`,
 			);
 		}
@@ -2841,7 +2841,7 @@ export class BrowserSession extends EventEmitter {
 			);
 			if (fs.existsSync(singletonLock)) {
 				fs.unlinkSync(singletonLock);
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Multiple chrome processes may be trying to share userDataDir=${this.browserProfile.userDataDir}`,
 				);
 			}
@@ -3099,7 +3099,7 @@ export class BrowserSession extends EventEmitter {
 						try {
 							await page.waitForLoadState();
 						} catch (e: any) {
-							this.logger.warning(
+							this.logger.warn(
 								`⚠️ Page ${logPrettyUrl(page.url())} failed to finish loading after click: ${e.constructor.name}: ${e.message}`,
 							);
 						}
@@ -3111,7 +3111,7 @@ export class BrowserSession extends EventEmitter {
 					try {
 						await page.waitForLoadState();
 					} catch (e: any) {
-						this.logger.warning(
+						this.logger.warn(
 							`⚠️ Page ${logPrettyUrl(page.url())} failed to finish loading after click: ${e.constructor.name}: ${e.message}`,
 						);
 					}
@@ -3136,7 +3136,7 @@ export class BrowserSession extends EventEmitter {
 					error.message.includes("Cannot find context with specified id") ||
 					error.message.includes("Protocol error")
 				) {
-					this.logger.warning(
+					this.logger.warn(
 						`⚠️ Element context lost, attempting to re-locate element: ${error.constructor.name}`,
 					);
 					// Try to re-locate the element
@@ -3186,7 +3186,7 @@ export class BrowserSession extends EventEmitter {
 							elementNode.viewportCoordinates.center
 						) {
 							try {
-								this.logger.warning(
+								this.logger.warn(
 									`⚠️ Element click failed, falling back to coordinate click at (${elementNode.viewportCoordinates.center.x}, ${elementNode.viewportCoordinates.center.y})`,
 								);
 								await page.mouse.click(
@@ -3331,7 +3331,7 @@ export class BrowserSession extends EventEmitter {
 		} catch (error: any) {
 			if (error.message.toLowerCase().includes("timeout")) {
 				const timeout = this.browserProfile.defaultNavigationTimeout || 30000;
-				this.logger.warning(
+				this.logger.warn(
 					`⚠️ Loading ${normalizedUrl} didn't finish after ${timeout / 1000}s, continuing anyway...`,
 				);
 			} else {
@@ -3417,7 +3417,7 @@ export class BrowserSession extends EventEmitter {
 				`🍪 Saved ${safeCookies.length} cookies to cookiesFile= ${logPrettyPath(cookiesFilePath)}`,
 			);
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`❌ Failed to save cookies to cookiesFile= ${logPrettyPath(cookiesFilePath!)}: ${error.constructor.name}: ${error.message}`,
 			);
 		}
@@ -3452,7 +3452,7 @@ export class BrowserSession extends EventEmitter {
 				`🍪 Saved ${cookieCount + originCount} cookies to storageState= ${path}`,
 			);
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`❌ Failed to save cookies to storageState= ${path}: ${error.constructor.name}: ${error.message}`,
 			);
 		}
@@ -3499,7 +3499,7 @@ export class BrowserSession extends EventEmitter {
 				await this._saveCookiesToFile(path, cookies);
 				const newPath = path.replace(/[^/]*$/, "storage_state.json");
 				await this._saveStorageStateToFile(newPath, storageState);
-				this.logger.warning(
+				this.logger.warn(
 					"⚠️ cookiesFile is deprecated. Please use storageState instead.",
 				);
 				return;
@@ -3758,7 +3758,7 @@ export class BrowserSession extends EventEmitter {
 			if (error instanceof URLNotAllowedError) {
 				throw error;
 			}
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ Page load for ${logPrettyUrl(page.url())} failed due to ${error.constructor.name}, continuing anyway...`,
 			);
 		}
@@ -3864,7 +3864,7 @@ export class BrowserSession extends EventEmitter {
 	 */
 	private async _checkAndHandleNavigation(page: Page): Promise<void> {
 		if (!this._isUrlAllowed(page.url())) {
-			this.logger.warning(
+			this.logger.warn(
 				`⛔️ Navigation to non-allowed URL detected: ${page.url()}`,
 			);
 			try {
@@ -3896,7 +3896,7 @@ export class BrowserSession extends EventEmitter {
 		try {
 			await page.waitForLoadState();
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ Page failed to fully load after navigation: ${error.constructor.name}: ${error.message}`,
 			);
 		}
@@ -3911,7 +3911,7 @@ export class BrowserSession extends EventEmitter {
 		try {
 			await page.waitForLoadState();
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ Page failed to fully load after refresh: ${error.constructor.name}: ${error.message}`,
 			);
 		}
@@ -4185,7 +4185,7 @@ export class BrowserSession extends EventEmitter {
 			try {
 				screenshotB64 = await this.takeScreenshot();
 			} catch (error: any) {
-				this.logger.warning(
+				this.logger.warn(
 					`Failed to capture screenshot: ${error.constructor.name}: ${error.message}`,
 				);
 				screenshotB64 = null;
@@ -4287,7 +4287,7 @@ export class BrowserSession extends EventEmitter {
 					sources: false, // Reduce trace size
 				});
 			} catch (error: any) {
-				this.logger.warning(`Failed to start tracing: ${error.message}`);
+				this.logger.warn(`Failed to start tracing: ${error.message}`);
 			}
 		}
 	}
@@ -4932,7 +4932,7 @@ export class BrowserSession extends EventEmitter {
 		try {
 			await (page as any).waitForLoadState();
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ New page failed to fully load: ${error.constructor.name}: ${error.message}`,
 			);
 		}
@@ -4975,7 +4975,7 @@ export class BrowserSession extends EventEmitter {
 		if (!this.initialized || !this.browserContext) {
 			// If we were initialized but lost connection, reset state first to avoid infinite loops
 			if (this.initialized && !this.browserContext) {
-				this.logger.warning(
+				this.logger.warn(
 					`💔 Browser ${this.connectionStr} disconnected while trying to create a new tab, reconnecting...`,
 				);
 				this.resetConnectionState();
@@ -4999,7 +4999,7 @@ export class BrowserSession extends EventEmitter {
 		try {
 			await newPage.waitForLoadState();
 		} catch (error: any) {
-			this.logger.warning(
+			this.logger.warn(
 				`⚠️ New page [${tabIdx}]${logPrettyUrl(newPage.url())} failed to fully load: ${error.constructor.name}: ${error.message}`,
 			);
 		}
@@ -5256,7 +5256,7 @@ export class BrowserSession extends EventEmitter {
 					}
 				}
 			} catch (error: any) {
-				this.logger.warning(
+				this.logger.warn(
 					`❌ Failed to load cookies from storageState: ${error.constructor.name}: ${error.message}`,
 				);
 			}

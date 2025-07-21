@@ -79,7 +79,7 @@ export class CloudSync {
 						// Always run auth to show the cloud URL, even if already authenticated
 						this.authTask = this.backgroundAuth(this.sessionId);
 					} else {
-						logger.warning("Cannot start auth - sessionId not set yet");
+						logger.warn("Cannot start auth - sessionId not set yet");
 					}
 				}
 			}
@@ -147,20 +147,20 @@ export class CloudSync {
 			}
 		} catch (error: any) {
 			if (error.name === "TimeoutError") {
-				logger.warning(`⚠️ Event send timed out after 10 seconds: ${event}`);
+				logger.warn(`⚠️ Event send timed out after 10 seconds: ${event}`);
 			} else if (
 				error.name === "TypeError" &&
 				error.message.includes("fetch")
 			) {
-				logger.warning(
+				logger.warn(
 					`⚠️ Failed to connect to cloud service at ${this.baseUrl}: ${error.message}`,
 				);
 			} else if (error.name === "AbortError") {
-				logger.warning(
+				logger.warn(
 					`⚠️ HTTP error sending event ${event}: ${error.name}: ${error.message}`,
 				);
 			} else {
-				logger.warning(
+				logger.warn(
 					`⚠️ Unexpected error sending event ${event}: ${error.constructor.name}: ${error.message}`,
 				);
 			}
@@ -229,7 +229,7 @@ export class CloudSync {
 			try {
 				await this.sendEvent(event);
 			} catch (error: any) {
-				logger.warning(`Failed to resend pending event: ${error.message}`);
+				logger.warn(`Failed to resend pending event: ${error.message}`);
 			}
 		}
 
@@ -286,7 +286,7 @@ export class CloudSync {
 				events.map((event) => JSON.stringify(event)).join("\n") + "\n";
 			await fs.writeFile(walPath, updatedContent);
 		} catch (error: any) {
-			logger.warning(`Failed to update WAL user IDs: ${error.message}`);
+			logger.warn(`Failed to update WAL user IDs: ${error.message}`);
 		}
 	}
 
