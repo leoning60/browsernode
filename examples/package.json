@@ -1,0 +1,27 @@
+{
+	"name": "browsernode-examples",
+	"version": "0.4.4",
+	"description": "Examples for BrowserNode library",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"simple": "tsx simple.ts",
+		"dev": "tsx"
+	},
+	"dependencies": {
+		"browsernode": "file:..",
+		"dotenv": "^16.6.1",
+		"zod": "^3.24.2",
+		"csv-writer": "^1.6.0",
+		"pdf-parse": "^1.1.1",
+		"otplib": "^12.0.1",
+		"csv-parse": "^5.6.0",
+		"csv-stringify": "^6.5.2"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.13",
+		"@types/pdf-parse": "^1.1.5",
+		"tsx": "^4.19.3",
+		"typescript": "^5.8.2"
+	}
+}
