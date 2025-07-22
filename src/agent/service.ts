@@ -56,7 +56,7 @@ import { FileSystem } from "../filesystem/file_system";
 import bnLogger from "../logging_config";
 import { CloudSync } from "../sync";
 import { ProductTelemetry } from "../telemetry/service";
-import type { AgentTelemetryEvent } from "../telemetry/views";
+import { AgentTelemetryEvent } from "../telemetry/views";
 import { SignalHandler, getBrowserNodeVersion, logPrettyPath } from "../utils";
 import { timeExecution } from "../utils_old";
 import { createHistoryGif } from "./gif";
@@ -1233,27 +1233,29 @@ export class Agent<
 		const finalRes = this.state.history.finalResult();
 		const finalResultStr = finalRes !== null ? JSON.stringify(finalRes) : null;
 
-		this.telemetry.capture({
-			task: this.task,
-			model: this.llm.model,
-			modelProvider: this.llm.provider,
-			plannerLlm: this.settings.plannerLLM?.model || null,
-			maxSteps,
-			maxActionsPerStep: this.settings.maxActionsPerStep,
-			useVision: this.settings.useVision,
-			useValidation: this.settings.validateOutput,
-			version: this.version,
-			source: this.source,
-			actionErrors: this.state.history.errors(),
-			actionHistory: actionHistoryData,
-			urlsVisited: this.state.history.urls(),
-			steps: this.state.nSteps,
-			totalInputTokens: tokenSummary.promptTokens,
-			totalDurationSeconds: this.state.history.totalDurationSeconds(),
-			success: this.state.history.isSuccessful(),
-			finalResultResponse: finalResultStr,
-			errorMessage: agentRunError || null,
-		} as AgentTelemetryEvent);
+		this.telemetry.capture(
+			new AgentTelemetryEvent({
+				task: this.task,
+				model: this.llm.model,
+				modelProvider: this.llm.provider,
+				plannerLlm: this.settings.plannerLLM?.model || null,
+				maxSteps,
+				maxActionsPerStep: this.settings.maxActionsPerStep,
+				useVision: this.settings.useVision,
+				useValidation: this.settings.validateOutput,
+				version: this.version,
+				source: this.source,
+				actionErrors: this.state.history.errors(),
+				actionHistory: actionHistoryData,
+				urlsVisited: this.state.history.urls(),
+				steps: this.state.nSteps,
+				totalInputTokens: tokenSummary.promptTokens,
+				totalDurationSeconds: this.state.history.totalDurationSeconds(),
+				success: this.state.history.isSuccessful(),
+				finalResultResponse: finalResultStr,
+				errorMessage: agentRunError || null,
+			}),
+		);
 	}
 
 	/**
