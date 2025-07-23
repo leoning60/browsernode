@@ -28,14 +28,14 @@ try {
 process.env["BROWSERNODE_LOGGING_LEVEL"] = "result";
 
 // Import project modules
-import { Agent } from "./agent/service.js";
-import { AgentSettings } from "./agent/views.js";
-import { BrowserProfile, BrowserSession } from "./browser/index.js";
-import { CONFIG } from "./config.js";
-import { Controller } from "./controller/service.js";
-import { ChatAnthropic } from "./llm/anthropic/chat.js";
-import { ChatGoogle } from "./llm/google/chat.js";
-import { ChatOpenAI } from "./llm/openai/chat.js";
+import { Agent } from "./agent/service";
+import { AgentSettings } from "./agent/views";
+import { BrowserProfile, BrowserSession } from "./browser/index";
+import { CONFIG } from "./config";
+import { Controller } from "./controller/service";
+import { ChatAnthropic } from "./llm/anthropic/chat";
+import { ChatGoogle } from "./llm/google/chat";
+import { ChatOpenAI } from "./llm/openai/chat";
 
 const userDataDir = path.join(CONFIG.browsernodeProfilesDir, "cli");
 
@@ -53,24 +53,29 @@ if (!fs.existsSync(userDataDir)) {
 
 // Logo components with styling for rich panels
 const browserLogo = `
-				   [white]   ++++++   +++++++++   [/]                                
-				   [white] +++     +++++     +++  [/]                                
-				   [white] ++    ++++   ++    ++  [/]                                
-				   [white] ++  +++       +++  ++  [/]                                
-				   [white]   ++++          +++    [/]                                
-				   [white]  +++             +++   [/]                                
-				   [white] +++               +++  [/]                                
-				   [white] ++   +++      +++  ++  [/]                                
-				   [white] ++    ++++   ++    ++  [/]                                
-				   [white] +++     ++++++    +++  [/]                                
-				   [white]   ++++++    +++++++    [/]                                
+				   [white] NNNNNNNN        NNNNNNNN [/]                                
+				   [white] N:::::::N       N::::::N [/]                                
+				   [white] N::::::::N      N::::::N [/]                                
+				   [white] N:::::::::N     N::::::N [/]                                
+				   [white] N::::::::::N    N::::::N [/]                                
+				   [white] N:::::::::::N   N::::::N [/]                                
+				   [white] N:::::::N::::N  N::::::N [/]                                
+				   [white] N::::::N N::::N N::::::N [/]                                
+				   [white] N::::::N  N::::N:::::::N [/]                                
+				   [white] N::::::N   N:::::::::::N [/]                                
+				   [white] N::::::N    N::::::::::N [/]                                
+				   [white] N::::::N     N:::::::::N [/]                                
+				   [white] N::::::N      N::::::::N [/]                                
+				   [white] N::::::N       N:::::::N [/]                                
+				   [white] N::::::N        N::::::N [/]                                
+				   [white] NNNNNNNN         NNNNNNN [/]                                
 
-[white]██████╗ ██████╗  ██████╗ ██╗    ██╗███████╗███████╗██████╗[/]     [darkorange]██╗   ██╗███████╗███████╗[/]
-[white]██╔══██╗██╔══██╗██╔═══██╗██║    ██║██╔════╝██╔════╝██╔══██╗[/]    [darkorange]██║   ██║██╔════╝██╔════╝[/]
-[white]██████╔╝██████╔╝██║   ██║██║ █╗ ██║███████╗█████╗  ██████╔╝[/]    [darkorange]██║   ██║███████╗█████╗[/]  
-[white]██╔══██╗██╔══██╗██║   ██║██║███╗██║╚════██║██╔══╝  ██╔══██╗[/]    [darkorange]██║   ██║╚════██║██╔══╝[/]  
-[white]██████╔╝██║  ██║╚██████╔╝╚███╔███╔╝███████║███████╗██║  ██║[/]    [darkorange]╚██████╔╝███████║███████╗[/]
-[white]╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚══╝╚══╝ ╚══════╝╚══════╝╚═╝  ╚═╝[/]     [darkorange]╚═════╝ ╚══════╝╚══════╝[/]
+[white]██████╗ ██████╗  ██████╗ ██╗    ██╗███████╗███████╗██████╗ ███╗   ██╗ ██████╗ ██████╗ ███████╗[/]
+[white]██╔══██╗██╔══██╗██╔═══██╗██║    ██║██╔════╝██╔════╝██╔══██╗████╗  ██║██╔═══██╗██╔══██╗██╔════╝[/]
+[white]██████╔╝██████╔╝██║   ██║██║ █╗ ██║███████╗█████╗  ██████╔╝██╔██╗ ██║██║   ██║██║  ██║█████╗[/]  
+[white]██╔══██╗██╔══██╗██║   ██║██║███╗██║╚════██║██╔══╝  ██╔══██╗██║╚██╗██║██║   ██║██║  ██║██╔══╝[/]  
+[white]██████╔╝██║  ██║╚██████╔╝╚███╔███╔╝███████║███████╗██║  ██║██║ ╚████║╚██████╔╝██████╔╝███████╗[/]
+[white]╚═════╝ ╚═╝  ╚═╝ ╚═════╝  ╚══╝╚══╝ ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝[/]
 `;
 
 // Common UI constants
@@ -1701,7 +1706,10 @@ async function main(): Promise<void> {
 }
 
 // Run the main function
-if (require.main === module) {
+if (
+	process.argv[1]?.endsWith("cli.js") ||
+	process.argv[1]?.endsWith("cli.ts")
+) {
 	main().catch((error) => {
 		console.error("Fatal error:", error);
 		process.exit(1);

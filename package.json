@@ -24,7 +24,7 @@
 	"types": "./dist/index.d.ts",
 	"type": "module",
 	"bin": {
-		"browsernode-cli": "./dist/cli.js"
+		"browsernode-cli": "./bin/cli.js"
 	},
 	"workspaces": ["examples"],
 	"exports": {
@@ -49,9 +49,9 @@
 			"import": "./dist/agent/views.js"
 		}
 	},
-	"files": ["dist", "README.md", "LICENSE"],
+	"files": ["dist", "bin", "README.md", "LICENSE"],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/dom_tree/index.js dist/dom/dom_tree/ && chmod +x dist/cli.js",
+		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/dom_tree/index.js dist/dom/dom_tree/ && chmod +x bin/cli.js",
 		"prepublishOnly": "npm run build",
 		"test": "vitest",
 		"cli": "tsx src/tokens/cli.ts"
@@ -85,9 +85,7 @@
 		"clipboardy": "^4.0.0",
 		"commander": "^12.1.0",
 		"cors": "^2.8.5",
-
 		"dotenv": "^16.6.1",
-		"express": "^5.1.0",
 		"groq": "^3.96.0",
 		"langchain": "^0.3.20",
 		"lefthook": "^1.11.9",
@@ -98,14 +96,13 @@
 		"playwright": "^1.52.0",
 		"posthog-node": "^5.5.0",
 		"reflect-metadata": "^0.2.2",
-		"sharp": "^0.33.5",
+		"sharp": "^0.34.3",
 		"systeminformation": "^5.27.7",
 		"terminal-image": "^3.1.1",
 		"tiktoken": "^1.0.21",
 		"ts-node": "^10.9.2",
 		"tsx": "^4.19.3",
 		"turndown": "^7.2.0",
-		"undici": "^7.11.0",
 		"uuid": "^11.1.0",
 		"vitest": "^3.0.9",
 		"winston": "^3.17.0",
