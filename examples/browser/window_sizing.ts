@@ -42,16 +42,18 @@ async function exampleCustomWindowSize(): Promise<void> {
 		const page = await browserSession.getCurrentPage();
 
 		// Navigate to a test page
-		await page.goto("https://example.com", { waitUntil: "domcontentloaded" });
+		await page.goto("https://search.brave.com", {
+			waitUntil: "domcontentloaded",
+		});
 
 		// Wait a bit to see the window
 		await new Promise((resolve) => setTimeout(resolve, 1000));
 
 		// Get the actual viewport size using JavaScript
-		const actualContentSize = await (page as any).evaluate(`() => ({
-			width: window.innerWidth,
-			height: window.innerHeight,
-		})`);
+		const actualContentSize = await (page as any).evaluate(() => ({
+			width: (window as any).innerWidth,
+			height: (window as any).innerHeight,
+		}));
 
 		let expectedPageSize: { width: number; height: number };
 
@@ -107,13 +109,15 @@ async function exampleNoViewportOption(): Promise<void> {
 		await browserSession.start();
 
 		const page = await browserSession.getCurrentPage();
-		await page.goto("https://example.com", { waitUntil: "domcontentloaded" });
+		await page.goto("https://search.brave.com", {
+			waitUntil: "domcontentloaded",
+		});
 		await new Promise((resolve) => setTimeout(resolve, 1000));
 
 		// Get viewport size (inner dimensions)
 		const viewport = await (page as any).evaluate(() => ({
-			width: window.innerWidth,
-			height: window.innerHeight,
+			width: (window as any).innerWidth,
+			height: (window as any).innerHeight,
 		}));
 
 		if (profile.windowSize) {
@@ -127,8 +131,64 @@ async function exampleNoViewportOption(): Promise<void> {
 
 		// Get the actual window size (outer dimensions)
 		const windowSize = await (page as any).evaluate(() => ({
-			width: window.outerWidth,
-			height: window.outerHeight,
+			width: (window as any).outerWidth,
+			height: (window as any).outerHeight,
+		}));
+		console.log(`Actual window size (outer): ${JSON.stringify(windowSize)}`);
+
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+	} catch (error) {
+		console.error(`Error in example 2: ${error}`);
+	} finally {
+		if (browserSession) {
+			await browserSession.close();
+		}
+	}
+}
+
+async function example3ViewportOption(): Promise<void> {
+	console.log("\n=== Example 3: Window Sizing with viewport configuration ===");
+
+	const profile = new BrowserProfile({
+		windowSize: { width: 3456, height: 2234 },
+		viewport: undefined, // Explicitly disable viewport override
+		headless: false,
+	});
+
+	let browserSession: BrowserSession | null = null;
+
+	try {
+		browserSession = new BrowserSession({
+			browserProfile: profile,
+		});
+
+		await browserSession.start();
+
+		const page = await browserSession.getCurrentPage();
+		await page.goto("https://search.brave.com", {
+			waitUntil: "domcontentloaded",
+		});
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+
+		// Get viewport size (inner dimensions)
+		const viewport = await (page as any).evaluate(() => ({
+			width: (window as any).innerWidth,
+			height: (window as any).innerHeight,
+		}));
+
+		if (profile.windowSize) {
+			console.log(
+				`Configured size: width=${profile.windowSize.width}, height=${profile.windowSize.height}`,
+			);
+		} else {
+			console.log("No window size configured");
+		}
+		console.log(`Actual viewport size: ${JSON.stringify(viewport)}`);
+
+		// Get the actual window size (outer dimensions)
+		const windowSize = await (page as any).evaluate(() => ({
+			width: (window as any).outerWidth,
+			height: (window as any).outerHeight,
 		}));
 		console.log(`Actual window size (outer): ${JSON.stringify(windowSize)}`);
 
@@ -184,6 +244,9 @@ async function main(): Promise<void> {
 
 	// Run example 2
 	await exampleNoViewportOption();
+
+	// Run example 3
+	await example3ViewportOption();
 
 	console.log("\n✅ All examples completed!");
 }
