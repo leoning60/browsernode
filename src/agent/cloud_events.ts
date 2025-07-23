@@ -4,7 +4,7 @@ import * as path from "path";
 import base64 from "base64-js";
 import * as fs from "fs/promises";
 import { v4 as uuidv4 } from "uuid";
-import { BaseEvent } from "./eventbus_utli";
+import { BaseEvent } from "./eventbus_util";
 
 const maxStringLength = 100000; // 100K chars ~ 25k tokens should be enough
 const maxUrlLength = 100000;
