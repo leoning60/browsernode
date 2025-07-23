@@ -6,14 +6,15 @@
 		"declarationMap": true,
 		"sourceMap": true,
 		"noEmit": false,
-		"moduleResolution": "node",
+		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": false,
 		"verbatimModuleSyntax": false,
 		"allowSyntheticDefaultImports": true,
 		"esModuleInterop": true,
 		"noImplicitAny": false,
 		"skipLibCheck": true,
-		"target": "ES2022"
+		"target": "ES2022",
+		"module": "ES2022"
 	},
 	"include": ["src/**/*"],
 	"exclude": [
