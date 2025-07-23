@@ -53,8 +53,8 @@ export class ProductTelemetry {
 		"telemetry_user_id",
 	);
 	private static readonly PROJECT_API_KEY =
-		"phc_F8JMNjW1i2KbGUTaW1unnDdLSPCoyc52SGRU0JecaUh";
-	private static readonly HOST = "https://eu.i.posthog.com";
+		"phc_JDYwvcWcw9MBx00B100uc2eC3WLRYOsikkXLzcsyTdD";
+	private static readonly HOST = "https://us.i.posthog.com";
 	private static readonly UNKNOWN_USER_ID = "UNKNOWN";
 
 	private currentUserId: string | null = null;
@@ -75,6 +75,9 @@ export class ProductTelemetry {
 				host: ProductTelemetry.HOST,
 				disableGeoip: false,
 				enableExceptionAutocapture: true,
+				// Configure for short-lived processes (CLI applications)
+				flushAt: 1, // Send immediately after 1 event
+				flushInterval: 0, // Don't wait for time-based flushing
 			});
 
 			// Silence PostHog logging if not in debug mode
@@ -97,6 +100,31 @@ export class ProductTelemetry {
 		this.directCapture(event);
 	}
 
+	/**
+	 * Capture event immediately without queuing (recommended for short-lived processes)
+	 */
+	async captureImmediate(event: BaseTelemetryEvent): Promise<void> {
+		if (this.posthogClient === null) {
+			return;
+		}
+
+		try {
+			// Use the regular capture method since we've configured flushAt: 1
+			this.posthogClient.capture({
+				distinctId: this.userId,
+				event: event.name,
+				properties: { ...event.properties, ...POSTHOG_EVENT_SETTINGS },
+			});
+
+			// Ensure immediate sending by calling flush
+			await this.posthogClient.flush();
+		} catch (error) {
+			logger.error(
+				`Failed to send immediate telemetry event ${event.name}: ${error}`,
+			);
+		}
+	}
+
 	private directCapture(event: BaseTelemetryEvent): void {
 		/**
 		 * Should not be thread blocking because PostHog handles it asynchronously
@@ -116,10 +144,10 @@ export class ProductTelemetry {
 		}
 	}
 
-	flush(): void {
+	async flush(): Promise<void> {
 		if (this.posthogClient) {
 			try {
-				this.posthogClient.flush();
+				await this.posthogClient.flush();
 				logger.debug("PostHog client telemetry queue flushed.");
 			} catch (error) {
 				logger.error(`Failed to flush PostHog client: ${error}`);

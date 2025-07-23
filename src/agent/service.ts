@@ -6,7 +6,7 @@ import { inspect, promisify } from "util";
 import { config } from "dotenv";
 import { v4 as uuidv4 } from "uuid";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { EventBus } from "./eventbus_utli";
+import { EventBus } from "./eventbus_util";
 // Load environment variables
 config();
 import {
@@ -1301,9 +1301,14 @@ export class Agent<
 		// Set up the signal handler with callbacks specific to this agent
 		const onForceExitLogTelemetry = () => {
 			this._logAgentEvent(maxSteps, "SIGINT: Cancelled by user");
-			// Call the flush method on the telemetry instance
+			// Call the shutdown method on the telemetry instance to ensure all events are sent
+			// Note: We don't await this since it's a force exit, but we initiate the shutdown
 			if (this.telemetry) {
-				this.telemetry.flush();
+				this.telemetry.shutdown().catch((error) => {
+					this.logger.error(
+						`Failed to shutdown telemetry on force exit: ${error}`,
+					);
+				});
 			}
 			this.forceExitTelemetryLogged = true; // Set the flag
 		};
@@ -1452,6 +1457,10 @@ export class Agent<
 			if (!this.forceExitTelemetryLogged) {
 				try {
 					this._logAgentEvent(maxSteps, agentRunError);
+					// Ensure telemetry data is sent before exit
+					if (this.telemetry) {
+						await this.telemetry.shutdown();
+					}
 				} catch (logError) {
 					this.logger.error(`Failed to log telemetry event: ${logError}`);
 				}
