@@ -2662,7 +2662,24 @@ export class BrowserSession extends EventEmitter {
 			!this.browserProfile.headless
 		) {
 			// attempt to resize the actual browser window
+			console.debug(
+				"---->BrowserSession#_setupViewports() this.resizeBrowserWindow(page)",
+				this.browserProfile.windowSize,
+			);
 			await this.resizeBrowserWindow(page);
+
+			// After resizing, apply the updated viewport to all existing pages
+			if (this.browserProfile.viewport) {
+				for (const currentPage of this.browserContext.pages()) {
+					try {
+						await currentPage.setViewportSize(this.browserProfile.viewport);
+					} catch (error: any) {
+						this.logger.warn(
+							`⚠️ Failed to apply viewport to existing page: ${error.constructor.name}: ${error.message}`,
+						);
+					}
+				}
+			}
 		}
 	}
 
@@ -2692,6 +2709,19 @@ export class BrowserSession extends EventEmitter {
 				},
 			});
 			await cdpSession.detach();
+
+			// After resizing the window, also resize the viewport to match
+			// This ensures the page content fills the entire window
+			const viewportSize = {
+				width: this.browserProfile.windowSize.width,
+				height: this.browserProfile.windowSize.height,
+			};
+			await page.setViewportSize(viewportSize);
+			// Update browserProfile.viewport so other methods can use it
+			this.browserProfile.viewport = viewportSize;
+			this.logger.debug(
+				`📐 Resized viewport to match window size: ${logSize(viewportSize)}`,
+			);
 		} catch (error: any) {
 			try {
 				// Fallback to JavaScript resize if CDP setWindowBounds fails
@@ -2700,14 +2730,25 @@ export class BrowserSession extends EventEmitter {
 					this.browserProfile.windowSize.width,
 					this.browserProfile.windowSize.height,
 				);
+
+				// Also resize viewport in fallback case
+				const viewportSize = {
+					width: this.browserProfile.windowSize.width,
+					height: this.browserProfile.windowSize.height,
+				};
+				await page.setViewportSize(viewportSize);
+				// Update browserProfile.viewport so other methods can use it
+				this.browserProfile.viewport = viewportSize;
+				this.logger.debug(
+					`📐 Resized viewport to match window size (fallback): ${logSize(viewportSize)}`,
+				);
 				return;
 			} catch (fallbackError) {
 				// Both methods failed
+				this.logger.warn(
+					`⚠️ Failed to resize browser window to ${logSize(this.browserProfile.windowSize)} using both CDP setWindowBounds and JavaScript fallback: ${error.constructor.name}: ${error.message}`,
+				);
 			}
-
-			this.logger.warn(
-				`⚠️ Failed to resize browser window to ${logSize(this.browserProfile.windowSize)} using CDP setWindowBounds: ${error.constructor.name}: ${error.message}`,
-			);
 		}
 	}
 
