@@ -24,7 +24,7 @@
 	"types": "./dist/index.d.ts",
 	"type": "module",
 	"bin": {
-		"browsernode-cli": "./bin/cli.js"
+		"browsernode-cli": "./cli/cli.js"
 	},
 	"workspaces": ["examples"],
 	"exports": {
@@ -51,7 +51,7 @@
 	},
 	"files": ["dist", "bin", "README.md", "LICENSE"],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/dom_tree/index.js dist/dom/dom_tree/ && chmod +x bin/cli.js",
+		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/dom_tree/index.js dist/dom/dom_tree/ && chmod +x cli/cli.js",
 		"prepublishOnly": "npm run build",
 		"test": "vitest",
 		"cli": "tsx src/tokens/cli.ts"
