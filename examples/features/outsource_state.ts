@@ -11,11 +11,7 @@ import { Agent } from "browsernode";
 import { AgentState } from "browsernode/agent/views";
 import { BrowserProfile, BrowserSession } from "browsernode/browser";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import * as fs from "fs/promises";
-
-// Load environment variables
-config();
 
 async function main() {
 	// Get the directory where this script is located

@@ -3,14 +3,10 @@
  *
  * This example demonstrates how to use browsernode to navigate through Wikipedia
  * by clicking on links to go from the Banana page to the Quantum mechanics page.
- * Based on the video: https://preview.screen.studio/share/vuq91Ej8
  */
 
 import { Agent, BrowserProfile, BrowserSession } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-config();
 
 // Check required environment variables
 if (!process.env.OPENAI_API_KEY) {

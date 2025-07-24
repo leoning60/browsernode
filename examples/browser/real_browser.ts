@@ -1,8 +1,5 @@
 import { Agent, BrowserProfile, BrowserSession } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-config();
 
 // Browser profile configuration
 const browserProfile = new BrowserProfile({

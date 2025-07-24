@@ -23,9 +23,6 @@
 
 import { Agent, BrowserProfile, BrowserSession } from "browsernode";
 import { ChatGoogle } from "browsernode/llm";
-import { config } from "dotenv";
-
-config();
 
 const apiKey = process.env.GOOGLE_API_KEY;
 if (!apiKey) {

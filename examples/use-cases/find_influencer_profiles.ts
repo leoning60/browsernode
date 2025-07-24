@@ -9,10 +9,7 @@
 
 import { ActionResult, Agent, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Check required environment variables
 const BEARER_TOKEN = process.env.BEARER_TOKEN;

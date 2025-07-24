@@ -21,10 +21,7 @@ import * as https from "https";
 import { ActionResult, Agent, Controller } from "browsernode";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Zod schemas for Person and PersonList
 const PersonSchema = z.object({

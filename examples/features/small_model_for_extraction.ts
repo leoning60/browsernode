@@ -10,10 +10,6 @@ import * as path from "path";
 import { Agent } from "browsernode";
 import { BrowserProfile, BrowserSession } from "browsernode/browser";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 async function main() {
 	// Initialize the main model for complex reasoning and actions

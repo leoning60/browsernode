@@ -18,10 +18,6 @@
 import { Agent, Controller } from "browsernode";
 import { ChatGoogle } from "browsernode/llm";
 import { Command } from "commander";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 // Task definitions
 const task1 = `

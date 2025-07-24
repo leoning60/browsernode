@@ -10,10 +10,6 @@ import { Agent } from "browsernode";
 import { AgentHistoryList } from "browsernode/agent/views";
 import { BrowserProfile, BrowserSession } from "browsernode/browser";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 async function main() {
 	// Create LLM instance

@@ -21,10 +21,6 @@ import path from "path";
 import { Agent } from "browsernode";
 import { BrowserProfile, BrowserSession } from "browsernode/browser";
 import { ChatGoogle } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 async function runDownload() {
 	// Check for required environment variable

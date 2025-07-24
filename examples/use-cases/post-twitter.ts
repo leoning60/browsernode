@@ -16,15 +16,12 @@
  * message="XXXXX"
  * reply_url="XXXXX"
  *
- * Any issues, contact me on X @defichemist95
+ * Any issues, contact me on X @leoning_ai
  * @dev You need to add OPENAI_API_KEY to your environment variables.
  */
 
 import { Agent, BrowserProfile, BrowserSession, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-config();
 
 // Check required environment variables
 if (!process.env.OPENAI_API_KEY) {

@@ -3,10 +3,7 @@ import { BrowserProfile } from "browsernode/browser";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
 import clipboard from "clipboardy";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Initialize controller
 const controller = new Controller();

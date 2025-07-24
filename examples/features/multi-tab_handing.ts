@@ -1,9 +1,5 @@
 import { Agent } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 async function main() {
 	// Initialize the language model

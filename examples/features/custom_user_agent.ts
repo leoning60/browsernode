@@ -21,10 +21,6 @@ import { Agent, Controller } from "browsernode";
 import { BrowserProfile, BrowserSession } from "browsernode/browser";
 import { ChatAnthropic, ChatOpenAI } from "browsernode/llm";
 import { Command } from "commander";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 function getLlm(provider: string) {
 	if (provider === "anthropic") {

@@ -2,11 +2,7 @@ import { Client } from "@gradio/client";
 import { Agent, ChatOpenAI } from "browsernode";
 import type { ActionResult, AgentHistoryList } from "browsernode";
 import cors from "cors";
-import { config } from "dotenv";
 import express from "express";
-
-// Load environment variables
-config();
 
 interface ActionResultData {
 	isDone: boolean;

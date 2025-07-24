@@ -15,10 +15,7 @@ import * as path from "path";
 import { Agent, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
 import cors from "cors";
-import { config } from "dotenv";
 import express, { type Request, type Response } from "express";
-
-config();
 
 /*********************
  *                   *

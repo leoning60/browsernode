@@ -9,9 +9,6 @@
 
 import { Agent } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-config();
 
 // Check if OPENAI_API_KEY is set
 if (!process.env.OPENAI_API_KEY) {

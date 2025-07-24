@@ -8,10 +8,6 @@ import * as readline from "readline";
 import { Agent } from "browsernode";
 import { BrowserProfile, BrowserSession } from "browsernode/browser";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 class AgentController {
 	private agent: Agent;

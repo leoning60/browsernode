@@ -10,9 +10,6 @@
  */
 
 import { BrowserProfile, BrowserSession } from "browsernode";
-import { config } from "dotenv";
-
-config();
 
 async function exampleCustomWindowSize(): Promise<void> {
 	console.log("\n=== Example 1: Custom Window Size ===");
@@ -21,7 +18,6 @@ async function exampleCustomWindowSize(): Promise<void> {
 	const profile = new BrowserProfile({
 		windowSize: { width: 800, height: 600 }, // Small size for demonstration
 		// You can also use playwright device profiles:
-		// device: playwright.devices['iPhone 13'],
 		// deviceScaleFactor: 1.0, // change to 2~3 to emulate a high-DPI display for high-res screenshots
 		// viewport: { width: 800, height: 600 }, // set the viewport (aka content size)
 		// screen: { width: 800, height: 600 }, // hardware display size to report to websites via JS

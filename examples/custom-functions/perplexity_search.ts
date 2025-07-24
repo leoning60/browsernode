@@ -2,10 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ActionResult, Agent, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Define the Person and PersonList schemas using Zod
 const PersonSchema = z.object({

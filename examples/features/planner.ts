@@ -7,10 +7,6 @@
 import { Agent } from "browsernode";
 import { BrowserProfile } from "browsernode/browser";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 async function main() {
 	// Create LLM instances

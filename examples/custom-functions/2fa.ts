@@ -1,11 +1,9 @@
 import { ActionResult, Agent, Controller } from "browsernode";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { authenticator } from "otplib";
 import { z } from "zod";
 
-config();
 /**
  * Go to https://authenticationtest.com/totpChallenge/ , the copy the secret key from the page.
  * Set the OTP_SECRET_KEY environment variable to the secret key.

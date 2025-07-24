@@ -1,9 +1,7 @@
 import { Agent } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 
 // @dev You need to add OPENAI_API_KEY to your environment variables.
-config();
 
 const llm = new ChatOpenAI({
 	model: "gpt-4.1-mini",

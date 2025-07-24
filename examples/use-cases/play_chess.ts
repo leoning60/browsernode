@@ -16,10 +16,7 @@ import {
 import { ChatOpenAI } from "browsernode/llm";
 import * as cheerio from "cheerio";
 import { Chess } from "chess.js";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Check required environment variables
 if (!process.env.OPENAI_API_KEY) {

@@ -1,10 +1,7 @@
 import { ActionResult, Agent, Controller } from "browsernode";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 /**
  * Action filters (domains and pageFilter) let you limit actions available to the Agent on a step-by-step/page-by-page basis.

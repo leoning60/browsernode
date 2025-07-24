@@ -3,10 +3,7 @@ import * as path from "path";
 import { ActionResult, Agent, Controller } from "browsernode";
 import type { BrowserSession } from "browsernode/browser";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Initialize controller
 const controller = new Controller();

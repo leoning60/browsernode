@@ -17,10 +17,6 @@
 
 import { Agent } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 // Define the extended system message
 // This adds custom instructions to the default browsernode system prompt

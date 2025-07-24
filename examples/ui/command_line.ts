@@ -2,10 +2,6 @@ import { Agent, ChatAnthropic, ChatOpenAI } from "browsernode";
 import { BrowserSession } from "browsernode";
 import { Controller } from "browsernode";
 import type { BaseChatModel } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
 
 interface CommandLineArgs {
 	query: string;

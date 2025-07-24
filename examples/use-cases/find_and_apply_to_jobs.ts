@@ -18,11 +18,7 @@ import {
 } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
 import * as csv from "csv-writer";
-import { config } from "dotenv";
 import { z } from "zod";
-// import pdf from "pdf-parse"; // Dynamic import used instead
-
-config();
 
 // Check required environment variables
 const requiredEnvVars = ["OPENAI_API_KEY"];

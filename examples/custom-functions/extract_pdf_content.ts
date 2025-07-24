@@ -1,10 +1,7 @@
 import { Mistral } from "@mistralai/mistralai";
 import { ActionResult, Agent, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Check for required environment variables
 if (!process.env.OPENAI_API_KEY) {

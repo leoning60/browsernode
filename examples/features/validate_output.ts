@@ -11,11 +11,7 @@ import { ActionResult, Agent } from "browsernode";
 import { Controller } from "browsernode";
 import { BrowserProfile, BrowserSession } from "browsernode/browser";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-// Load environment variables
-config();
 
 // Create the controller
 const controller = new Controller();

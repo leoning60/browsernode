@@ -5,10 +5,7 @@ import { fileURLToPath } from "url";
 import { ActionResult, Agent, Controller } from "browsernode";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 function getCurrentDirPath() {
 	const __filename = fileURLToPath(import.meta.url);

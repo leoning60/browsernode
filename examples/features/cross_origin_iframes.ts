@@ -6,9 +6,6 @@
 
 import { Agent, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-config();
 
 if (!process.env.OPENAI_API_KEY) {
 	throw new Error(

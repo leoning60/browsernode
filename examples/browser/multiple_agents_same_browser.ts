@@ -13,9 +13,6 @@
 
 import { Agent, BrowserProfile, BrowserSession } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-config();
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) {

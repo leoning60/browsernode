@@ -3,10 +3,7 @@ import * as path from "path";
 import { ActionResult, Agent, Controller } from "browsernode";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Create download directory
 const downloadPath = path.join(process.cwd(), "downloads");

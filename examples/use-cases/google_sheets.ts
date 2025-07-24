@@ -26,11 +26,6 @@
 
 import { Agent, BrowserProfile, BrowserSession, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
-
-// Load environment variables
-config();
-
 // Check required environment variables
 if (!process.env.OPENAI_API_KEY) {
 	throw new Error(

@@ -2,10 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { BrowserProfile, BrowserSession } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import terminalImage from "terminal-image";
-
-config();
 
 const llm = new ChatOpenAI({ model: "gpt-4.1-mini" });
 

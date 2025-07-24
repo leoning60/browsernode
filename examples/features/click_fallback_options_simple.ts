@@ -6,10 +6,8 @@ import { fileURLToPath } from "url";
 import { ActionResult, Agent, Controller } from "browsernode";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
 
-config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 

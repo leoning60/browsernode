@@ -1,10 +1,7 @@
 import { Agent } from "browsernode";
 import { ChatGoogle } from "browsernode/llm";
-import { config } from "dotenv";
 
 // @dev You need to add GEMINI_API_KEY to your environment variables.
-config();
-
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
 	throw new Error("GOOGLE_API_KEY is not set");

@@ -2,11 +2,7 @@ import * as readline from "readline";
 import { Agent } from "browsernode";
 import { BrowserSession } from "browsernode/browser";
 import { ChatGoogle } from "browsernode/llm";
-import { config } from "dotenv";
 import { chromium } from "playwright";
-
-// Load environment variables
-config();
 
 async function main() {
 	const apiKey = process.env.GOOGLE_API_KEY;

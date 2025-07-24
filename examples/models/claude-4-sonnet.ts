@@ -1,9 +1,7 @@
 import { Agent } from "browsernode";
 import { ChatAnthropic } from "browsernode";
-import { config } from "dotenv";
 
 // @dev You need to add ANTHROPIC_API_KEY to your environment variables.
-config();
 
 const llm = new ChatAnthropic({
 	model: "claude-4-sonnet-20250514",

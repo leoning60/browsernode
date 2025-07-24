@@ -18,10 +18,7 @@
 
 import { Agent, Controller } from "browsernode";
 import { ChatOpenAI } from "browsernode/llm";
-import { config } from "dotenv";
 import { z } from "zod";
-
-config();
 
 // Zod schemas for Post and Posts
 const PostSchema = z.object({
