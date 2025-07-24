@@ -63,3 +63,5 @@ recordings
 downloads
 .config
 agent_state.json
+
+docs/development
