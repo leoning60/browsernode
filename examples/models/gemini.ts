@@ -8,13 +8,13 @@ if (!apiKey) {
 }
 
 const llm = new ChatGoogle({
-	model: "gemini-2.0-flash",
+	model: "gemini-2.5-flash",
 	temperature: 0.0,
 	apiKey: process.env.GEMINI_API_KEY,
 });
 
-const task =
-	"Go to example.com, click on the first link, and give me the title of the page";
+// const task = "Go to search.brave.com, search for 'gemini'";
+const task = "Go to search.brave.com, search for 'google stock price'";
 const agent = new Agent(task, llm);
 
 async function main() {

@@ -9,9 +9,8 @@ const llm = new ChatAnthropic({
 	apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const task =
-	"Go to amazon.com, search for laptop, sort by best rating, and give me the price of the first result";
-// const task = "Search for the nvidia stock price ";
+const task = "Go to search.brave.com, search for 'Anthropic claude code'";
+// const task ="Go to amazon.com, search for laptop, sort by best rating, and give me the price of the first result";
 
 const agent = new Agent(task, llm);
 

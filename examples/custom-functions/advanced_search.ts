@@ -164,7 +164,7 @@ async function main() {
 
 		// Extract the final result from the agent history
 		const finalResult = agentHistory.finalResult();
-		console.log("---->finalResult:", finalResult);
+		// console.log("finalResult:", finalResult);
 
 		if (finalResult) {
 			const parsed = PersonListSchema.parse(JSON.parse(finalResult));

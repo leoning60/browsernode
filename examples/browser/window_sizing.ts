@@ -146,7 +146,7 @@ async function example3ViewportOption(): Promise<void> {
 	console.log("\n=== Example 3: Window Sizing with viewport configuration ===");
 
 	const profile = new BrowserProfile({
-		windowSize: { width: 3456, height: 2234 },
+		windowSize: { width: 3456 / 2, height: 2234 / 2 },
 		viewport: undefined, // Explicitly disable viewport override
 		headless: false,
 	});
