@@ -298,9 +298,19 @@ export async function getDisplaySize(): Promise<ViewportSize | null> {
 			}
 
 			if (mainDisplay && mainDisplay.resolutionX && mainDisplay.resolutionY) {
+				const physicalWidth = parseInt(mainDisplay.resolutionX.toString());
+				const physicalHeight = parseInt(mainDisplay.resolutionY.toString());
+
+				// On macOS (darwin), Retina displays use 2x scaling
+				// So we need to divide by 2 to get the logical resolution
+				const isDarwin = process.platform === "darwin";
+				const width = isDarwin ? Math.floor(physicalWidth / 2) : physicalWidth;
+				const height = isDarwin
+					? Math.floor(physicalHeight / 2)
+					: physicalHeight;
 				return {
-					width: parseInt(mainDisplay.resolutionX.toString()),
-					height: parseInt(mainDisplay.resolutionY.toString()),
+					width,
+					height,
 				};
 			}
 		}
@@ -696,13 +706,7 @@ export class BrowserProfile implements BrowserProfileOptions {
 		 * screen, windowSize, windowPosition, viewport, noViewport, deviceScaleFactor
 		 */
 		const displaySize = await getDisplaySize();
-		// logger.debug(
-		// 	`---->detectDisplayConfiguration displaySize: ${JSON.stringify(displaySize, null, 2)}`,
-		// );
 		const hasScreenAvailable = Boolean(displaySize);
-		// logger.debug(
-		// 	`---->detectDisplayConfiguration hasScreenAvailable: ${hasScreenAvailable}`,
-		// );
 
 		this.screen = this.screen || displaySize || { width: 1280, height: 1100 };
 
