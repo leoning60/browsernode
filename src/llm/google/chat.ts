@@ -395,7 +395,6 @@ export class ChatGoogle implements BaseChatModel {
 			if (error.response && error.response.statusCode) {
 				statusCode = error.response.statusCode;
 			}
-
 			throw new ModelProviderError(
 				errorMessage,
 				statusCode || 502, // Use default if null

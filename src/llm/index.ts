@@ -12,6 +12,7 @@ export { ChatGoogle } from "./google/chat";
 // export { ChatGroq } from "./groq/chat";
 export { ChatOllama } from "./ollama/chat";
 export { ChatOpenAI } from "./openai/chat";
+export { ChatOpenRouter } from "./openrouter/chat";
 
 // Core types and interfaces
 export type { BaseChatModel } from "./base";
