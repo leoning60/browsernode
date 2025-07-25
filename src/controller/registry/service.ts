@@ -563,10 +563,6 @@ export class Registry<Context = any> {
 
 		const availableActions: Map<string, RegisteredAction> = new Map();
 
-		logger.info(
-			`---->createActionModel started, includeActions: ${includeActions}, page: ${page?.url() || "null"}`,
-		);
-
 		for (const [name, action] of this.registry.actions.entries()) {
 			if (
 				includeActions !== null &&
@@ -584,9 +580,6 @@ export class Registry<Context = any> {
 					(action.domains === null || action.domains === undefined)
 				) {
 					availableActions.set(name, action);
-					logger.debug(
-						`---->createActionModel added action without filters: ${name}`,
-					);
 				}
 				continue;
 			}
@@ -604,22 +597,12 @@ export class Registry<Context = any> {
 			// Include action if both filters match (or if either is not present)
 			if (domainIsAllowed && pageIsAllowed) {
 				availableActions.set(name, action);
-				// logger.debug(
-				// 	`---->createActionModel added action with filters: ${name}`,
-				// );
 			}
 		}
-
-		logger.info(
-			`---->createActionModel availableActions.size: ${availableActions.size}`,
-		);
 
 		// If no actions available, return empty ActionModel
 		if (availableActions.size === 0) {
 			const emptyModel = new ActionModel({});
-			logger.info(
-				`---->createActionModel returning empty model: ${JSON.stringify(emptyModel)}`,
-			);
 			return emptyModel;
 		}
 
@@ -632,20 +615,8 @@ export class Registry<Context = any> {
 			actionModelData[name] = action.paramModel || {};
 		}
 
-		// logger.info(
-		// 	`---->createActionModel actionModelData: ${JSON.stringify(actionModelData, null, 2)}`,
-		// );
-
 		const resultModel = new ActionModel(actionModelData);
-		// logger.info(
-		// 	`---->createActionModel resultModel: ${JSON.stringify(resultModel, null, 2)}`,
-		// );
-		// logger.info(
-		// 	`---->createActionModel resultModel keys: ${JSON.stringify(Object.keys(resultModel))}`,
-		// );
-		logger.info(
-			`---->createActionModel resultModel keys length: ${Object.keys(resultModel).length}`,
-		);
+
 		return resultModel;
 	}
 

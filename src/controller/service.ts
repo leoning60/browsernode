@@ -636,9 +636,7 @@ Website:
 ${content}`;
 			try {
 				const userMessage = createUserMessage(prompt);
-				// logger.debug(
-				// 	`---->extractStructuredData userMessage: ${userMessage} <----`,
-				// );
+
 				const response = await pageExtractionLlm.ainvoke([userMessage]);
 
 				const extractedContent = `Page Link: ${page.url()}\nQuery: ${params.query}\nExtracted Content:\n${response.completion}`;

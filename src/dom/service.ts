@@ -154,18 +154,8 @@ export class DomService {
 			//   args,
 			// )) as any;
 
-			// console.log(
-			// 	"---->DomService buildDomTree this.jsCode:",
-			// 	JSON.stringify(this.jsCode, null, 2),
-			// );
-			// console.log(
-			// 	"---->DomService buildDomTree args:",
-			// 	JSON.stringify(args, null, 2),
-			// );
-			// console.log("---->DomService buildDomTree this.page:", this.page);
 			let evalPage: any;
 			try {
-				// console.log("---->DomService about to evaluate JavaScript code");
 				// Use a simpler approach - pass the function as a string and execute it with parameters
 				// Playwright requires wrapping multiple arguments in an object
 				evalPage = (await (this.page as any).evaluate(
@@ -187,14 +177,6 @@ export class DomService {
 					},
 					{ jsCodeString: this.jsCode, evaluationArgs: args },
 				)) as any;
-				// console.log(
-				// 	"---->DomService JavaScript evaluation completed, result type:",
-				// 	typeof evalPage,
-				// );
-				// console.log(
-				// 	"---->DomService JavaScript evaluation result keys:",
-				// 	evalPage ? Object.keys(evalPage) : "null/undefined",
-				// );
 			} catch (e: any) {
 				this.logger.error("Error evaluating JavaScript: %s", e);
 				throw e;

@@ -4,9 +4,7 @@ import type { ChatModel } from "openai/resources/shared";
 import type { ReasoningEffort } from "openai/resources/shared";
 import type { ResponseFormatJSONSchema } from "openai/resources/shared";
 import { z } from "zod";
-// Import OpenAI types
 import { zodToJsonSchema } from "zod-to-json-schema";
-// import { Client as UndiciClient } from "undici";
 
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { modelValidateJson } from "../../bn_utils";
@@ -34,7 +32,7 @@ const ReasoningModels: Array<ChatModel | string> = [
 ];
 
 /**
- * A wrapper around AsyncOpenAI that implements the BaseLLM protocol.
+ * A wrapper around OpenAI that implements the BaseChatModel protocol.
  *
  * This class accepts all OpenAI parameters while adding model
  * and temperature parameters for the LLM interface.
@@ -197,9 +195,6 @@ export class ChatOpenAI implements BaseChatModel {
 		messages: BaseMessage[],
 		outputFormat?: (new (...args: any[]) => T) | undefined,
 	): Promise<ChatInvokeCompletion<T> | ChatInvokeCompletion<string>> {
-		logger.debug(
-			`---->ChatOpenAI ainvoke outputFormat:${outputFormat ? `[Function: ${outputFormat.name || "anonymous"}]` : "undefined"}`,
-		);
 		const openaiMessages: ChatCompletionMessageParam[] =
 			OpenAIMessageSerializer.serializeMessages(messages);
 		try {
@@ -207,11 +202,6 @@ export class ChatOpenAI implements BaseChatModel {
 			if (ReasoningModels.includes(this.model)) {
 				reasoningEffortDict = { reasoning_effort: this.reasoningEffort };
 			}
-
-			// Debug: Check system message content
-			// logger.debug(
-			// 	`---->ChatOpenAI ainvoke openaiMessages:${JSON.stringify(openaiMessages, null, 2)}`,
-			// );
 
 			if (!outputFormat) {
 				// Return string response
@@ -250,13 +240,7 @@ export class ChatOpenAI implements BaseChatModel {
 					strict: true,
 					schema: SchemaOptimizer.createOptimizedJsonSchema(outputFormat),
 				};
-				// console.debug(
-				// 	`---->ChatOpenAI ainvoke json_schema responseFormat:${JSON.stringify(
-				// 		responseFormat,
-				// 		null,
-				// 		2,
-				// 	)}`,
-				// );
+
 				const response = await this.getClient().chat.completions.create({
 					model: this.model,
 					messages: openaiMessages,

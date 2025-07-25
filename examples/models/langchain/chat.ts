@@ -120,10 +120,6 @@ export class ChatLangchain {
 		// Convert browsernode messages to LangChain messages
 		const langchainMessages =
 			LangChainMessageSerializer.serializeMessages(messages);
-		// console.log(
-		// 	"---->ChatLangchain ainvoke langchainMessages:",
-		// 	JSON.stringify(langchainMessages, null, 2),
-		// );
 
 		try {
 			if (outputFormat === undefined || outputFormat === null) {
@@ -151,20 +147,10 @@ export class ChatLangchain {
 				} as ChatInvokeCompletion;
 			} else {
 				// Use LangChain's structured output capability
-				// console.log(
-				// 	"---->ChatLangchain ainvoke outputFormat:",
-				// 	outputFormat
-				// 		? `[Function: ${outputFormat.name || "anonymous"}]`
-				// 		: "undefined",
-				// );
 				try {
 					// Use SchemaOptimizer to get the proper schema, similar to other LLM implementations
 					const jsonSchema =
 						SchemaOptimizer.createOptimizedJsonSchema(outputFormat);
-					// console.log(
-					// 	"---->ChatLangchain ainvoke jsonSchema from SchemaOptimizer:",
-					// 	JSON.stringify(jsonSchema, null, 2),
-					// );
 
 					// Try different approaches based on the LangChain model type
 					let structuredChat;
@@ -172,23 +158,11 @@ export class ChatLangchain {
 						// First try with the JSON schema directly
 						structuredChat = this.chat.withStructuredOutput(jsonSchema);
 					} catch (schemaError) {
-						// console.log(
-						// 	"---->ChatLangchain ainvoke fallback to outputFormat class:",
-						// 	schemaError,
-						// );
 						// If that fails, try with the class directly (some LangChain models might prefer this)
 						structuredChat = this.chat.withStructuredOutput(outputFormat);
 					}
 
-					// console.log(
-					// 	"---->ChatLangchain ainvoke structuredChat:",
-					// 	JSON.stringify(structuredChat, null, 2),
-					// );
 					const parsedObject = await structuredChat.invoke(langchainMessages);
-					// console.log(
-					// 	"---->ChatLangchain ainvoke parsedObject:",
-					// 	JSON.stringify(parsedObject, null, 2),
-					// );
 
 					// For structured output, usage metadata is typically not available
 					// in the parsed object since it's a constructor result, not an AIMessage
@@ -201,9 +175,7 @@ export class ChatLangchain {
 					} as ChatInvokeCompletion;
 				} catch (attributeError) {
 					// Fall back to manual parsing if withStructuredOutput is not available
-					// console.error(
-					// 	`---->ChatLangchain ainvoke fallback to manual parsing: ${attributeError}`,
-					// );
+
 					const response = (await this.chat.invoke(
 						langchainMessages,
 					)) as LangChainAIMessage;

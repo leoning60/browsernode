@@ -87,7 +87,7 @@ function logResponse(
 		!response.currentState ||
 		!response.currentState.evaluationPreviousGoal
 	) {
-		logger.warn("---->⚠️ Malformed response object, skipping response logging");
+		logger.warn("⚠️ Malformed response object, skipping response logging");
 		return;
 	}
 
@@ -582,31 +582,17 @@ export class Agent<
 	// Save current file system state to agent state
 	private _setupActionModels(): void {
 		// Initially only include actions with no filters
-		// this.logger.info("---->_setupActionModels starting...");
-		this.ActionModel = this.controller.registry.createActionModel();
-		// this.logger.info("---->_setupActionModels createActionModel completed");
 
-		// console.debug("---->_setupActionModels this.settings", this.settings);
+		this.ActionModel = this.controller.registry.createActionModel();
+
 		// Create output model with the dynamic actions
 		if (this.settings.useThinking) {
-			// this.logger.info(
-			// 	`---->_setupActionModels useThinking==true this.ActionModel: ${JSON.stringify(this.ActionModel, null, 2)}`,
-			// );
-			// this.logger.info(
-			// 	`---->_setupActionModels this.ActionModel keys: ${JSON.stringify(Object.keys(this.ActionModel))}`,
-			// );
 			this.AgentOutput = AgentOutput.typeWithCustomActions(this.ActionModel);
 		} else {
 			this.AgentOutput = AgentOutput.typeWithCustomActionsNoThinking(
 				this.ActionModel,
 			);
 		}
-		// this.logger.info(
-		// 	`---->_setupActionModels this.AgentOutput: ${typeof this.AgentOutput}`,
-		// );
-		// this.logger.info(
-		// 	`---->_setupActionModels this.AgentOutput: ${this.AgentOutput}`,
-		// );
 
 		// Used to force the done action when max_steps is reached
 		this.DoneActionModel = this.controller.registry.createActionModel(["done"]);
@@ -619,10 +605,6 @@ export class Agent<
 				this.DoneActionModel,
 			);
 		}
-		// this.logger.info(
-		// 	`---->_setupActionModels this.DoneAgentOutput: ${this.DoneAgentOutput}`,
-		// );
-		// this.logger.info("---->_setupActionModels completed");
 	}
 
 	/**
@@ -707,12 +689,12 @@ export class Agent<
 				// Defensive check: ensure DoneAgentOutput is defined before assignment
 				if (!this.DoneAgentOutput) {
 					this.logger.warn(
-						"---->⚠️ this.DoneAgentOutput is undefined, re-initializing action models",
+						"⚠️ this.DoneAgentOutput is undefined, re-initializing action models",
 					);
 					this._setupActionModels();
 					if (!this.DoneAgentOutput) {
 						throw new Error(
-							"---->Failed to initialize DoneAgentOutput - this.DoneAgentOutput is still undefined after _setupActionModels()",
+							"Failed to initialize DoneAgentOutput - this.DoneAgentOutput is still undefined after setupActionModels()",
 						);
 					}
 				}
@@ -1030,22 +1012,15 @@ export class Agent<
 	 */
 	@timeExecution("--getNextAction (agent)")
 	async getNextAction(inputMessages: BaseMessage[]): Promise<AgentOutput> {
-		// this.logger.debug(
-		// 	`---->getNextAction inputMessages: ${JSON.stringify(inputMessages, null, 2)}`,
-		// );
-		// this.logger.debug(
-		// 	`---->getNextAction this.AgentOutput: ${this.AgentOutput}`,
-		// );
-
 		// Defensive check: ensure AgentOutput is defined
 		if (!this.AgentOutput) {
 			this.logger.warn(
-				"---->⚠️ this.AgentOutput is undefined, re-initializing action models",
+				"⚠️ this.AgentOutput is undefined, re-initializing action models",
 			);
 			this._setupActionModels();
 			if (!this.AgentOutput) {
 				throw new Error(
-					"---->Failed to initialize AgentOutput - this.AgentOutput is still undefined after _setupActionModels()",
+					"Failed to initialize AgentOutput - this.AgentOutput is still undefined after setupActionModels()",
 				);
 			}
 		}
@@ -1053,20 +1028,18 @@ export class Agent<
 		// Additional type safety check - ensure it's a proper class constructor
 		if (typeof this.AgentOutput !== "function") {
 			this.logger.error(
-				`---->❌ this.AgentOutput is not a function: ${typeof this.AgentOutput}, value: ${this.AgentOutput}`,
+				`❌ this.AgentOutput is not a function: ${typeof this.AgentOutput}, value: ${this.AgentOutput}`,
 			);
 			this._setupActionModels();
 			if (typeof this.AgentOutput !== "function") {
 				throw new Error(
-					"---->Failed to initialize AgentOutput - this.AgentOutput is not a proper class constructor",
+					"Failed to initialize AgentOutput - this.AgentOutput is not a proper class constructor",
 				);
 			}
 		}
 
 		const response = await this.llm.ainvoke(inputMessages, this.AgentOutput);
-		this.logger.debug(
-			`---->getNextAction response: ${JSON.stringify(response, null, 2)}`,
-		);
+
 		const completionData = response.completion as any;
 		// Create a proper AgentOutput instance instead of just type casting
 		const parsed = new AgentOutput(
@@ -1078,9 +1051,6 @@ export class Agent<
 		);
 
 		// Cut the number of actions to maxActionsPerStep if needed
-		// this.logger.debug(
-		// 	`---->getNextAction parsed: ${JSON.stringify(parsed, null, 2)}`,
-		// );
 		if (
 			parsed.action &&
 			parsed.action.length > this.settings.maxActionsPerStep
@@ -2176,11 +2146,7 @@ export class Agent<
 	 */
 	private async _updateActionModelsForPage(page: any): Promise<void> {
 		// Create new action model with current page's filtered actions
-		this.logger.info("---->_updateActionModelsForPage starting...");
 		this.ActionModel = this.controller.registry.createActionModel(null, page);
-		// this.logger.info(
-		// 	`---->_updateActionModelsForPage ActionModel: ${JSON.stringify(this.ActionModel, null, 2)}`,
-		// );
 
 		// Update output model with the new actions
 		if (this.settings.useThinking) {

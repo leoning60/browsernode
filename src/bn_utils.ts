@@ -41,7 +41,6 @@ export function modelDump(obj: any, excludeNone = false): any {
 }
 
 // export function modelDump(obj: any, excludeNone = false): any {
-// 	console.debug("----> modelDump start:", obj);
 // 	if (!obj) return null;
 
 // 	// Handle primitive types first (string, number, boolean, null, undefined)

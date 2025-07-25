@@ -3,7 +3,7 @@ import type { Logger } from "winston";
 import bnLogger from "./logging_config";
 
 const logger: Logger = bnLogger.child({
-	module: "browser_node/utils",
+	module: "browsernode/utils_old",
 });
 
 type AnyFunction<T = unknown, R = unknown> = (this: unknown, ...args: T[]) => R;

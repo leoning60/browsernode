@@ -34,31 +34,17 @@ export class SchemaOptimizer {
 		// Validate input - should not be undefined or null
 		if (model === undefined || model === null) {
 			throw new Error(
-				`--->SchemaOptimizer.createOptimizedJsonSchema() received ${model === null ? "null" : "undefined"} model. A valid Zod schema is required.`,
+				`SchemaOptimizer.createOptimizedJsonSchema() received ${model === null ? "null" : "undefined"} model. A valid Zod schema is required.`,
 			);
 		}
 
 		try {
 			// Generate original schema from various input types
 			const originalSchema = this.generateSchemaFromZod(model);
-			// console.debug(
-			// 	`---->SchemaOptimizer createOptimizedJsonSchema originalSchema:${JSON.stringify(
-			// 		originalSchema,
-			// 		null,
-			// 		2,
-			// 	)}`,
-			// );
 
 			// Use the conversion method to optimize the schema
 			const optimizedSchema = this.convertZodToOpenAI(originalSchema);
 
-			// console.debug(
-			// 	`---->SchemaOptimizer createOptimizedJsonSchema optimizedSchema:${JSON.stringify(
-			// 		optimizedSchema,
-			// 		null,
-			// 		2,
-			// 	)}`,
-			// );
 			return optimizedSchema;
 		} catch (error) {
 			console.error(`Failed to generate optimized JSON schema:`, error);

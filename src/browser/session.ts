@@ -2012,7 +2012,6 @@ export class BrowserSession extends EventEmitter {
 		try {
 			// Get test browser version
 			if (this.chromium) {
-				console.debug("----> launching test browser");
 				const testBrowser = await this.chromium.launch({ headless: true });
 				testBrowserVersion = testBrowser.version();
 				await testBrowser.close();
@@ -2056,12 +2055,7 @@ export class BrowserSession extends EventEmitter {
 		 * Detect any new child chrome processes that we might have launched
 		 */
 		const childPidsAfterLaunch = await this.getChildProcessPids();
-		this.logger.info(
-			`----> detectNewBrowserProcess childPidsAfterLaunch: ${JSON.stringify(Array.from(childPidsAfterLaunch), null, 2)}`,
-		);
-		this.logger.info(
-			`----> detectNewBrowserProcess childPidsBeforeLaunch: ${JSON.stringify(Array.from(childPidsBeforeLaunch), null, 2)}`,
-		);
+
 		const newChildPids = new Set(
 			[...childPidsAfterLaunch].filter(
 				(pid) => !childPidsBeforeLaunch.has(pid),
@@ -2080,10 +2074,6 @@ export class BrowserSession extends EventEmitter {
 				newChromeProcs.push(proc);
 			}
 		}
-
-		// this.logger.info(
-		// 	`----> detectNewBrowserProcess newChromeProcs: ${JSON.stringify(newChromeProcs, null, 2)}`,
-		// );
 
 		if (newChromeProcs.length === 0) {
 			this.logger.debug(
@@ -2204,9 +2194,6 @@ export class BrowserSession extends EventEmitter {
 					if (userDataDirValue) {
 						const actualUserDataDir = path.resolve(userDataDirValue);
 						if (expectedUserDataDir === actualUserDataDir) {
-							console.log(
-								`----> isOurChromeProcess(${pid}): MATCH! Found our Chrome process`,
-							);
 							return { pid, executablePath, cmdline };
 						}
 					}
@@ -2217,9 +2204,6 @@ export class BrowserSession extends EventEmitter {
 					executablePath.toLowerCase().includes("chrom") &&
 					!cmdline.some((arg) => arg.includes("--type="))
 				) {
-					console.log(
-						`----> isOurChromeProcess(${pid}): Found main Chrome process (no userDataDir check)`,
-					);
 					return { pid, executablePath, cmdline };
 				}
 			}
@@ -2662,10 +2646,6 @@ export class BrowserSession extends EventEmitter {
 			!this.browserProfile.headless
 		) {
 			// attempt to resize the actual browser window
-			console.debug(
-				"---->BrowserSession#_setupViewports() this.resizeBrowserWindow(page)",
-				this.browserProfile.windowSize,
-			);
 			await this.resizeBrowserWindow(page);
 
 			// After resizing, apply the updated viewport to all existing pages
@@ -3824,9 +3804,6 @@ export class BrowserSession extends EventEmitter {
 				: "";
 
 		if (bytesUsed !== undefined) {
-			this.logger.debug(
-				`---->_waitForPageAndFramesLoad bytesUsed: ${bytesUsed}`,
-			);
 			this.logger.info(
 				`➡️ Page navigation [${tabIdx}]${logPrettyUrl(page.url(), 40)} used ${(bytesUsed / 1024).toFixed(1)} KB in ${elapsed.toFixed(2)}s${extraDelay}`,
 			);
