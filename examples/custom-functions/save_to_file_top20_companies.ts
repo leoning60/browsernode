@@ -2,11 +2,31 @@ import * as fs from "fs";
 import * as path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
-import { ActionResult, Agent, Controller } from "browsernode";
+import {
+	ActionResult,
+	Agent,
+	BrowserProfile,
+	BrowserSession,
+	Controller,
+} from "browsernode";
 import type { Page } from "browsernode/browser/types";
 import { ChatOpenAI } from "browsernode/llm";
 import * as csv from "csv-writer";
 import { z } from "zod";
+
+// Browser profile configuration
+const browserProfile = new BrowserProfile({
+	// NOTE: you need to close your chrome browser - so that this can open your browser in debug mode
+	executablePath:
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+	userDataDir: "~/.config/browsernode/profiles/default",
+	headless: false,
+});
+
+// Browser session configuration
+const browserSession = new BrowserSession({
+	browserProfile: browserProfile,
+});
 
 function getCurrentDirPath() {
 	const __filename = fileURLToPath(import.meta.url);
@@ -105,6 +125,7 @@ async function main() {
 	// Create and run the agent
 	const agent = new Agent(task, llm, {
 		controller: controller,
+		browserSession: browserSession,
 	});
 
 	const result = await agent.run();

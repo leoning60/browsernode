@@ -53,13 +53,13 @@ async function main() {
 	const task = `
   Go to Google Flights and search for:
   - Click on the departure city input field
-  - Type London as the departure city and press enter
+  - Type Singapore as the departure city and press enter
   - Click on the destination city input field
-  - Type Paris as the destination city and press enter
+  - Type Tokyo as the destination city and press enter
   - Click on the departure date input field
-  - Type 30.06.2025 as the departure date and press enter
+  - Type 30.07.2025 as the departure date and press enter
   - Click on the return date input field
-  - Type 07.07.2025 as the return date and press enter
+  - Type 07.08.2025 as the return date and press enter
   - Search for flights
   - Sort by price
   - Extract the following information and provide them as the final result in JSON format:
@@ -74,7 +74,7 @@ async function main() {
 
 	// Initialize the language model
 	const model = new ChatOpenAI({
-		model: "gpt-4o",
+		model: "gpt-4.1",
 		apiKey: process.env.OPENAI_API_KEY,
 	});
 

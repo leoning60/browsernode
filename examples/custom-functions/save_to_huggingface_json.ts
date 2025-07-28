@@ -36,6 +36,20 @@ controller.action("Save models to JSON", {
 })(async function saveModelsToJson(params: Models, page: Page) {
 	const filePath = path.join(getCurrentDirPath(), "huggingface_models.json");
 
+	// Check if file already exists and has content
+	if (fs.existsSync(filePath)) {
+		const existingContent = fs.readFileSync(filePath, "utf-8");
+		if (existingContent.trim().length > 0) {
+			const msg = `Task already completed! The file huggingface_models.json already exists and contains data. No need to save again.`;
+			return new ActionResult({
+				extractedContent: msg,
+				includeInMemory: true,
+				longTermMemory: `Task was already completed - JSON file already exists`,
+				success: true,
+			});
+		}
+	}
+
 	try {
 		// Ensure directory exists
 		const dir = path.dirname(filePath);
@@ -61,11 +75,12 @@ controller.action("Save models to JSON", {
 			console.log(`✅ File saved successfully. Size: ${fileStats.size} bytes`);
 		}
 
-		const msg = `Saved ${params.models.length} HuggingFace models to huggingface_models.json`;
+		const msg = `Successfully completed the task! Saved ${params.models.length} HuggingFace models to huggingface_models.json. The task is now complete.`;
 		return new ActionResult({
 			extractedContent: msg,
 			includeInMemory: true,
-			longTermMemory: `Saved ${params.models.length} HuggingFace models to JSON file`,
+			longTermMemory: `Task completed successfully: Saved ${params.models.length} HuggingFace models to JSON file`,
+			success: true, // This helps the agent recognize success
 		});
 	} catch (error) {
 		const errorMsg = `❌ Failed to save models to JSON file: ${error}`;
@@ -94,6 +109,8 @@ async function main() {
 	- link: The full URL to the model page
 	
 	After collecting the data, use the "Save models to JSON" action to save all 10 models to a JSON file.
+	
+	IMPORTANT: Once you have successfully used the "Save models to JSON" action and confirmed the file was saved, the task is complete. Do not repeat the action or continue further.
 	`;
 
 	// Initialize the language model
