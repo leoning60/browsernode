@@ -1896,6 +1896,7 @@ export class Agent<
 		);
 		this.state.paused = true;
 		this._externalPauseEvent.clear();
+
 		// Task paused
 
 		// The signal handler will handle the asyncio pause logic for us
@@ -2417,6 +2418,9 @@ export class Agent<
 		};
 	}
 
+	/**
+	 * Utility function that raises an InterruptedError if the agent is stopped or paused.
+	 */
 	private async _raiseIfStoppedOrPaused(): Promise<void> {
 		if (this.registerExternalAgentStatusRaiseErrorCallback) {
 			if (await this.registerExternalAgentStatusRaiseErrorCallback()) {
@@ -2425,6 +2429,7 @@ export class Agent<
 		}
 
 		if (this.state.stopped || this.state.paused) {
+			// this.logger.debug("---->Agent paused after getting state");
 			throw new Error("Agent stopped or paused");
 		}
 	}

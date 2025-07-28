@@ -14,6 +14,17 @@ const logger: Logger = bnLogger.child({
 	module: "browsernode/utils",
 });
 
+// Global flag to indicate if a SignalHandler is active and handling pause logic
+let globalSignalHandlerActive = false;
+
+// Export the flag for other modules to check
+export function isSignalHandlerActive(): boolean {
+	return globalSignalHandlerActive;
+}
+
+// Check if we are exiting to avoid multiple exit attempts
+let exiting = false;
+
 // Get current file directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,9 +32,6 @@ const __dirname = path.dirname(__filename);
 // Load environment variables
 import dotenv from "dotenv";
 dotenv.config();
-
-// Global flag to prevent duplicate exit messages
-let exiting = false;
 
 // Define generic types
 type AnyFunction = (...args: any[]) => any;
@@ -88,6 +96,9 @@ export class SignalHandler {
 	 */
 	register(): void {
 		try {
+			// Set global flag to indicate this handler is active
+			globalSignalHandlerActive = true;
+
 			if (this.isWindows) {
 				// On Windows, use simple signal handling with immediate exit on Ctrl+C
 				const windowsHandler = (signal: NodeJS.Signals) => {
@@ -124,6 +135,9 @@ export class SignalHandler {
 	 */
 	unregister(): void {
 		try {
+			// Clear global flag
+			globalSignalHandlerActive = false;
+
 			if (this.originalSigintHandler) {
 				process.removeListener("SIGINT", this.originalSigintHandler);
 			}
@@ -214,6 +228,11 @@ export class SignalHandler {
 		console.error(
 			"----------------------------------------------------------------------",
 		);
+
+		// Wait for user input to resume or exit (non-blocking)
+		setImmediate(() => {
+			this.waitForResume();
+		});
 	}
 
 	/**
@@ -273,6 +292,7 @@ export class SignalHandler {
 					process.stdin.removeListener("data", handleInput);
 					process.stdin.setRawMode(false);
 					process.stdin.pause();
+					this.waitingForInput = false;
 
 					// Call resume callback if provided
 					if (this.resumeCallback) {
@@ -284,7 +304,6 @@ export class SignalHandler {
 			process.stdin.on("data", handleInput);
 		} catch (error) {
 			logger.error(`Error in waitForResume: ${error}`);
-		} finally {
 			this.waitingForInput = false;
 		}
 	}

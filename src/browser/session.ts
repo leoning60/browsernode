@@ -20,6 +20,7 @@ import { DomService } from "../dom/service";
 import { DOMElementNode, type SelectorMap } from "../dom/views";
 import bnLogger from "../logging_config";
 import {
+	isSignalHandlerActive,
 	logPrettyPath,
 	logPrettyUrl,
 	matchUrlWithDomainPattern,
@@ -143,6 +144,14 @@ function registerShutdownHooks(): void {
 
 	// Handle Ctrl+C (SIGINT)
 	process.on("SIGINT", async () => {
+		// Check if there's an active SignalHandler managing pause/resume logic
+		if (isSignalHandlerActive()) {
+			// Let the SignalHandler handle this, don't force exit
+			logger.debug(
+				"Active SignalHandler detected, skipping browser shutdown hooks",
+			);
+			return;
+		}
 		await shutdownPlaywright();
 		process.exit(0);
 	});
@@ -443,7 +452,7 @@ export class BrowserSession extends EventEmitter {
 		if (!this._logger) {
 			this._logger = logger.child({
 				sessionId: this.id,
-				module: "browser_node/browser/session",
+				module: "browsernode/browser/session",
 			});
 		}
 		return this._logger;
