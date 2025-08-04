@@ -32,7 +32,54 @@ npm init playwright@latest
 playwright install chromium
 ```
 
+
+Add your API keys for the provider you want to use to your `.env` file.
+```bash
+mv .env.example .env
+```
+
+```bash
+OPENAI_API_KEY=
+```
+For other settings, models, and more, check out the [documentation 📕](https://docs.browsernode.com).
+
 Spin up your agent:
+
+### Commonjs style
+```javascript
+const { Agent } = require("browsernode");
+const { ChatOpenAI } = require("browsernode/llm");
+
+(async () => {
+  const llm = new ChatOpenAI({
+    model: "gpt-4.1",
+    temperature: 0.0,
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  const task = "Search for the latest tesla stock price";
+  const agent = new Agent({
+    task,
+    llm,
+  });
+
+  console.log("---simple.ts agent run---");
+  const history = await agent.run();
+  console.log(history.usage);
+})();
+```
+
+
+### ESM style
+package.json
+```json
+{
+  ...
+"type": "module"
+  ...
+}
+```
+
 
 ```javascript
 import { Agent } from "browsernode";
@@ -52,15 +99,10 @@ const agent = new Agent({
 agent.run();
 ```
 
-Add your API keys for the provider you want to use to your `.env` file.
-```bash
-mv .env.example .env
+run
+```js
+npx tsx quickstart.ts
 ```
-
-```bash
-OPENAI_API_KEY=
-```
-For other settings, models, and more, check out the [documentation 📕](https://docs.browsernode.com).
 
 ## Test with UI
 You can test browsernode using [gadio_demo](./examples/ui/gradio_demo.ts)
