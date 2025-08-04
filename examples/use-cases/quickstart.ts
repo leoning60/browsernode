@@ -7,7 +7,10 @@ const llm = new ChatOpenAI({
 	apiKey: process.env.OPENAI_API_KEY,
 });
 
-const task = "Compare the price of gpt-4o and DeepSeek-V3";
-const agent = new Agent(task, llm);
+const task = "Compare the price of gpt-4o and k2";
+const agent = new Agent({
+	task: task,
+	llm: llm,
+});
 const history = await agent.run();
 console.log(history.usage);

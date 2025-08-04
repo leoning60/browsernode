@@ -38,13 +38,11 @@ async function main() {
 		await browserSession.start();
 
 		// Create agent
-		const agent = new Agent(
-			"go to google.com and type 'OpenAI' click search and give me the first url",
-			llm,
-			{
-				browserSession: browserSession,
-			},
-		);
+		const agent = new Agent({
+			task: "go to google.com and type 'OpenAI' click search and give me the first url",
+			llm: llm,
+			browserSession: browserSession,
+		});
 
 		// Run the agent and get history
 		const history: AgentHistoryList = await agent.run(3);

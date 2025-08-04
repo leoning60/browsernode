@@ -89,7 +89,9 @@ async function main() {
 		});
 
 		// Create agent with custom configuration
-		const agent = new Agent(options.query, llm, {
+		const agent = new Agent({
+			task: options.query,
+			llm: llm,
 			controller: controller,
 			browserSession: browserSession,
 			useVision: true,

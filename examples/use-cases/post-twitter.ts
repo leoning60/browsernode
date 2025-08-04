@@ -78,8 +78,8 @@ function createTwitterAgent(config: TwitterConfig): Agent {
 	const fullMessage = `@${config.targetUser} ${config.message}`;
 
 	// Create the agent with detailed instructions
-	const agent = new Agent(
-		`Navigate to Twitter and create a post and reply to a tweet.
+	const agent = new Agent({
+		task: `Navigate to Twitter and create a post and reply to a tweet.
 
         Here are the specific steps:
 
@@ -99,13 +99,11 @@ function createTwitterAgent(config: TwitterConfig): Agent {
         - Make sure the message is typed exactly as shown
         - Verify the post button is clickable before clicking
         - Do not click on the '+' button which will add another tweet`,
-		llm,
-		{
-			useVision: true,
-			controller: controller,
-			browserSession: browserSession,
-		},
-	);
+		llm: llm,
+		useVision: true,
+		controller: controller,
+		browserSession: browserSession,
+	});
 
 	return agent;
 }

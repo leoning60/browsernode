@@ -24,10 +24,10 @@ async function main() {
 		apiKey: process.env.OPENAI_API_KEY,
 	});
 
-	const agent = new Agent(
-		"go to https://captcha.com/demos/features/captcha-demo.aspx and solve the captcha",
-		llm,
-	);
+	const agent = new Agent({
+		task: "go to https://captcha.com/demos/features/captcha-demo.aspx and solve the captcha",
+		llm: llm,
+	});
 
 	const result = await agent.run();
 	console.log("🎯 Task completed:", result);

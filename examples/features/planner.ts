@@ -24,7 +24,9 @@ async function main() {
 		"Go to https://search.brave.com and search for tesla stock price";
 
 	// Create agent with planner configuration
-	const agent = new Agent(task, llm, {
+	const agent = new Agent({
+		task: task,
+		llm: llm,
 		plannerLLM: plannerLLM,
 		useVisionForPlanner: false,
 		plannerInterval: 1,

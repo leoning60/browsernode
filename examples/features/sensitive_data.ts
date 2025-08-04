@@ -71,7 +71,9 @@ async function main() {
 	});
 
 	// Create agent with sensitive data
-	const agent = new Agent(task, llm, {
+	const agent = new Agent({
+		task: task,
+		llm: llm,
 		sensitiveData: sensitiveData,
 		browserSession: browserSession,
 	});

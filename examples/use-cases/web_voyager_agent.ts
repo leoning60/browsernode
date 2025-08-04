@@ -121,7 +121,9 @@ async function performWebVoyagerTask(): Promise<void> {
 	const browserSession = createBrowserSession();
 
 	// Create the agent
-	const agent = new Agent(SELECTED_TASK, llm, {
+	const agent = new Agent({
+		task: SELECTED_TASK,
+		llm,
 		browserSession: browserSession,
 		validateOutput: webVoyagerConfig.validateOutput,
 		// enableMemory: webVoyagerConfig.enableMemory, // Note: This option might not exist in browsernode

@@ -387,7 +387,9 @@ async function runAgentWithRecording(): Promise<void> {
 	const controller = new Controller();
 
 	// Create agent
-	const agent = new Agent(task, llm, {
+	const agent = new Agent({
+		task: task,
+		llm: llm,
 		controller: controller,
 	});
 

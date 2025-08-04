@@ -36,13 +36,11 @@ async function main() {
 		await browserSession.start();
 
 		// Create agent
-		const agent = new Agent(
-			"Go to hackernews, then go to apple.com and return all titles of open tabs",
-			llm,
-			{
-				browserSession: browserSession,
-			},
-		);
+		const agent = new Agent({
+			task: "Go to hackernews, then go to apple.com and return all titles of open tabs",
+			llm: llm,
+			browserSession: browserSession,
+		});
 
 		// Run the agent - traces will be automatically saved to ./tmp/traces/
 		await agent.run();

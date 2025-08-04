@@ -90,7 +90,9 @@ IMPORTANT: Use these strategies:
 		const llm = initializeLlm();
 		const controller = new Controller();
 
-		const agent = new Agent(selectedTask, llm, {
+		const agent = new Agent({
+			task: selectedTask,
+			llm: llm,
 			controller: controller,
 			useVision: true,
 			maxActionsPerStep: 1,
@@ -224,7 +226,9 @@ async function runTaskInternal(
 		}
 
 		// Create agent with extended timeout and more steps
-		const agent = new Agent(selectedTask, llm, {
+		const agent = new Agent({
+			task: selectedTask,
+			llm: llm,
 			controller: controller,
 			useVision: true,
 			maxActionsPerStep: 1,

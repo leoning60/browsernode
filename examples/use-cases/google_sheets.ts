@@ -66,8 +66,8 @@ async function main() {
 		// );
 		// await eraser.run();
 
-		const researcher = new Agent(
-			`Open this Google Sheet and read it to understand the structure: https://docs.google.com/spreadsheets/d/1INaIcfpYXlMRWO__de61SHFCaqt1lfHlcvtXZPItlpI/edit
+		const researcher = new Agent({
+			task: `Open this Google Sheet and read it to understand the structure: https://docs.google.com/spreadsheets/d/1INaIcfpYXlMRWO__de61SHFCaqt1lfHlcvtXZPItlpI/edit
 			Make sure column headers are present and all existing values in the sheet are formatted correctly.
 			Columns should be labeled using the top row of cells:
 				A: "Company Name"
@@ -78,12 +78,10 @@ async function main() {
 			append a row to this existing Google Sheet. You can do a few searches at a time,
 			but make sure to check the sheet for errors after inserting a new batch of rows.
 			At the end, double check the formatting and structure and fix any issues by updating/overwriting cells.`,
-			model,
-			{
-				browserSession: browserSession,
-				controller: controller,
-			},
-		);
+			llm: model,
+			browserSession: browserSession,
+			controller: controller,
+		});
 
 		console.log("🚀 Starting Google Sheets automation...");
 		const result = await researcher.run();

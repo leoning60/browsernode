@@ -29,7 +29,10 @@ async function main(): Promise<void> {
 	const task = "Go to https://search.brave.com and search tesla stock price";
 
 	// Create and run the agent
-	const agent = new Agent(task, llm);
+	const agent = new Agent({
+		task: task,
+		llm: llm,
+	});
 
 	console.log(`🚀 Starting task: ${task}`);
 	console.log(`🤖 Using model: ${llm.name} (provider: ${llm.provider})`);

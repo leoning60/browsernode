@@ -94,15 +94,13 @@ async function main() {
 	});
 
 	// Create the agent
-	const agent = new Agent(
-		`Go to apple.com and trigger disco mode (if you don't know how to do that, then just move on).
+	const agent = new Agent({
+		task: `Go to apple.com and trigger disco mode (if you don't know how to do that, then just move on).
 		Then go to google.com and trigger disco mode.
 		After that, go to the Google login page and Use the force, luke.`,
-		llm,
-		{
-			controller: controller,
-		},
-	);
+		llm: llm,
+		controller: controller,
+	});
 
 	// Run the agent
 	const result = await agent.run(10);

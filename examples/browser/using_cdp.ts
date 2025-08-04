@@ -47,7 +47,9 @@ async function main() {
 		apiKey: apiKey,
 	});
 
-	const agent = new Agent(fullTask, model, {
+	const agent = new Agent({
+		task: fullTask,
+		llm: model,
 		browserSession: browserSession,
 	});
 

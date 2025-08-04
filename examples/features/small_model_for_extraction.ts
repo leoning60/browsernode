@@ -42,7 +42,9 @@ async function main() {
 	});
 
 	// Create agent with both models
-	const agent = new Agent(task, llm, {
+	const agent = new Agent({
+		task: task,
+		llm: llm,
 		browserSession: browserSession,
 		// Use the smaller model for extraction tasks to optimize costs
 		pageExtractionLLM: smallLlm,

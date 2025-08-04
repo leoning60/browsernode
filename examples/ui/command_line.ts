@@ -111,7 +111,9 @@ function initializeAgent(query: string, provider: string) {
 	const controller = new Controller();
 	const browserSession = new BrowserSession();
 
-	const agent = new Agent(query, llm, {
+	const agent = new Agent({
+		task: query,
+		llm: llm,
 		useVision: true,
 		maxActionsPerStep: 1,
 	});

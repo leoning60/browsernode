@@ -33,27 +33,25 @@ async function main() {
 		console.log("🚀 Starting multi-agent code editor system...");
 
 		// Initialize browser agent to open the online code editor
-		const agent1 = new Agent("Open an online code editor programiz.", model, {
+		const agent1 = new Agent({
+			task: "Open an online code editor programiz.",
+			llm: model,
 			browserSession: browserSession,
 		});
 
 		// Executor agent - executes code and provides feedback
-		const executor = new Agent(
-			"Executor. Execute the code written by the coder and suggest some updates if there are errors.",
-			model,
-			{
-				browserSession: browserSession,
-			},
-		);
+		const executor = new Agent({
+			task: "Executor. Execute the code written by the coder and suggest some updates if there are errors.",
+			llm: model,
+			browserSession: browserSession,
+		});
 
 		// Coder agent - writes the code
-		const coder = new Agent(
-			"Coder. Your job is to write and complete code. You are an expert coder. Code a simple calculator. Write the code on the coding interface after agent1 has opened the link.",
-			model,
-			{
-				browserSession: browserSession,
-			},
-		);
+		const coder = new Agent({
+			task: "Coder. Your job is to write and complete code. You are an expert coder. Code a simple calculator. Write the code on the coding interface after agent1 has opened the link.",
+			llm: model,
+			browserSession: browserSession,
+		});
 
 		// Execute agents in sequence
 		console.log("🌐 Agent1: Opening online code editor...");

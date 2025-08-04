@@ -17,18 +17,17 @@ if (!process.env.OPENAI_API_KEY) {
 const controller = new Controller();
 
 async function main() {
-	const agent = new Agent(
-		'Click "Go cross-site (simple page)" button on https://csreis.github.io/tests/cross-site-iframe.html then tell me the text within',
+	const agent = new Agent({
+		task: 'Click "Go cross-site (simple page)" button on https://csreis.github.io/tests/cross-site-iframe.html then tell me the text within',
 		// 'Navigate to https://csreis.github.io/tests/cross-site-iframe.html, click the "Go cross-site (simple page)" button once, then extract and return the visible text from the page. If the iframe content does not change after clicking, report what you can see.',
-		new ChatOpenAI({
+		llm: new ChatOpenAI({
 			model: "gpt-4o",
 			temperature: 0.0,
 			apiKey: process.env.OPENAI_API_KEY,
 		}),
-		{
-			controller: controller,
-		},
-	);
+
+		controller: controller,
+	});
 
 	const result = await agent.run();
 	console.log(`🎯 Task completed: ${result}`);

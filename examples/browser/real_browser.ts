@@ -22,13 +22,11 @@ async function main() {
 		apiKey: process.env.OPENAI_API_KEY,
 	});
 
-	const agent = new Agent(
-		"go to https://search.brave.com and find todays DOW stock price",
-		llm,
-		{
-			browserSession: browserSession,
-		},
-	);
+	const agent = new Agent({
+		task: "go to https://search.brave.com and find todays DOW stock price",
+		llm: llm,
+		browserSession: browserSession,
+	});
 
 	await agent.run();
 	await browserSession.close();

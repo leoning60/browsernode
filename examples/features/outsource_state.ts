@@ -31,7 +31,9 @@ async function main() {
 	const agentState = new AgentState();
 
 	for (let i = 0; i < 10; i++) {
-		const agent = new Agent(task, new ChatOpenAI({ model: "gpt-4o" }), {
+		const agent = new Agent({
+			task: task,
+			llm: new ChatOpenAI({ model: "gpt-4o" }),
 			browserSession: browserSession,
 			injectedAgentState: agentState,
 			pageExtractionLLM: new ChatOpenAI({ model: "gpt-4o-mini" }),

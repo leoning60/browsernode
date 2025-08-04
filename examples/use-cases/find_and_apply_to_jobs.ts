@@ -196,7 +196,9 @@ async function main() {
 	// Create agents for each task
 	const agents = tasks.map(
 		(task) =>
-			new Agent(task, llm, {
+			new Agent({
+				task: task,
+				llm: llm,
 				useVision: true,
 				controller: controller,
 				browserSession: browserSession,

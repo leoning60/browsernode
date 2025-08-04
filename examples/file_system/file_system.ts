@@ -162,7 +162,9 @@ NOTE: DO NOT USE extract_structured_data action - everything is visible in brows
 	});
 
 	// Create and run the agent
-	const agent = new Agent(task, llm, {
+	const agent = new Agent({
+		task: task,
+		llm: llm,
 		controller: controller,
 	});
 

@@ -76,7 +76,9 @@ async function runBrowserTask(
 		});
 
 		// Create and run the agent
-		const agent = new Agent(task, llm, {
+		const agent = new Agent({
+			task: task,
+			llm: llm,
 			useVision: true,
 			maxActionsPerStep: 10,
 		});

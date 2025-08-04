@@ -366,13 +366,11 @@ async function exampleDragDropSortableList(): Promise<void> {
 	});
 
 	// Create the agent
-	const agent = new Agent(
-		"Go to a drag and drop demo website like https://jqueryui.com/sortable/ and reorder some list items using drag and drop",
-		llm,
-		{
-			controller: controller,
-		},
-	);
+	const agent = new Agent({
+		task: "Go to a drag and drop demo website like https://jqueryui.com/sortable/ and reorder some list items using drag and drop",
+		llm: llm,
+		controller: controller,
+	});
 
 	// Run the agent
 	console.log("🚀 Starting drag and drop sortable list example...");
@@ -392,13 +390,11 @@ async function exampleDragDropCoordinates(): Promise<void> {
 		apiKey: process.env.OPENAI_API_KEY,
 	});
 
-	const agent = new Agent(
-		"Go to a canvas drawing website like https://sketch.io/sketchpad/ and draw a simple line using drag and drop from coordinates (200, 200) to (400, 300)",
-		llm,
-		{
-			controller: controller,
-		},
-	);
+	const agent = new Agent({
+		task: "Go to a canvas drawing website like https://sketch.io/sketchpad/ and draw a simple line using drag and drop from coordinates (200, 200) to (400, 300)",
+		llm: llm,
+		controller: controller,
+	});
 
 	console.log("🎨 Starting coordinate-based drag and drop example...");
 	const result = await agent.run();
@@ -417,13 +413,11 @@ async function exampleDragDropFileUpload(): Promise<void> {
 		apiKey: process.env.OPENAI_API_KEY,
 	});
 
-	const agent = new Agent(
-		"Go to a file upload demo website that supports drag and drop, find a file input area, and simulate dragging a file to upload it",
-		llm,
-		{
-			controller: controller,
-		},
-	);
+	const agent = new Agent({
+		task: "Go to a file upload demo website that supports drag and drop, find a file input area, and simulate dragging a file to upload it",
+		llm: llm,
+		controller: controller,
+	});
 
 	console.log("📁 Starting drag and drop file upload example...");
 	const result = await agent.run();

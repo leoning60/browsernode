@@ -92,14 +92,12 @@ async function performTwitterPosting(): Promise<void> {
 	const browserSession = createBrowserSession();
 
 	// Create the agent
-	const agent = new Agent(
-		`go to https://x.com. write a new post with the text "${twitterPostingConfig.postText}", and submit it`,
-		llm,
-		{
-			browserSession: browserSession,
-			maxActionsPerStep: twitterPostingConfig.maxActionsPerStep,
-		},
-	);
+	const agent = new Agent({
+		task: `go to https://x.com. write a new post with the text "${twitterPostingConfig.postText}", and submit it`,
+		llm: llm,
+		browserSession: browserSession,
+		maxActionsPerStep: twitterPostingConfig.maxActionsPerStep,
+	});
 
 	try {
 		console.log("🚀 Running agent...");

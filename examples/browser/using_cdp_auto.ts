@@ -79,7 +79,9 @@ async function main() {
 		});
 	}
 
-	const agent = new Agent(fullTask, model, {
+	const agent = new Agent({
+		task: fullTask,
+		llm: model,
 		browserSession: browserSession,
 	});
 

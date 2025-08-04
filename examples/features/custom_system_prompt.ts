@@ -42,7 +42,9 @@ async function main() {
 	});
 
 	// Create agent with extended system message
-	const agent = new Agent(task, model, {
+	const agent = new Agent({
+		task: task,
+		llm: model,
 		extendSystemMessage: extendSystemMessage,
 	});
 

@@ -66,7 +66,9 @@ function createScrollingAgent(config: ScrollingConfig): Agent {
 	});
 
 	// Create the agent with scrolling instructions
-	const agent = new Agent(config.scrollTask, llm, {
+	const agent = new Agent({
+		task: config.scrollTask,
+		llm: llm,
 		useVision: true,
 		browserSession: browserSession,
 	});

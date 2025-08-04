@@ -32,7 +32,9 @@ async function main() {
 	});
 
 	// Create agent with the browser session
-	const agent = new Agent("Go to https://tesla.com/", llm, {
+	const agent = new Agent({
+		task: "Go to https://tesla.com/",
+		llm: llm,
 		browserSession: browserSession,
 	});
 

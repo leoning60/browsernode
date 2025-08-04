@@ -15,7 +15,10 @@ const llm = new ChatGoogle({
 
 // const task = "Go to search.brave.com, search for 'gemini'";
 const task = "Go to search.brave.com, search for 'google stock price'";
-const agent = new Agent(task, llm);
+const agent = new Agent({
+	task: task,
+	llm: llm,
+});
 
 async function main() {
 	console.log("---gemini.ts agent run---");

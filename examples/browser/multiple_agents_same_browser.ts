@@ -43,11 +43,15 @@ async function main(): Promise<void> {
 	const task2 = "find todays weather in Zurich and extract it as json";
 
 	// Create two agents that will share the same browser session
-	const agent1 = new Agent(task1, llm, {
+	const agent1 = new Agent({
+		task: task1,
+		llm: llm,
 		browserSession: browserSession,
 	});
 
-	const agent2 = new Agent(task2, llm, {
+	const agent2 = new Agent({
+		task: task2,
+		llm: llm,
 		browserSession: browserSession,
 	});
 

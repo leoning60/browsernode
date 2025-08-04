@@ -16,15 +16,13 @@ class AgentController {
 
 	constructor() {
 		const llm = new ChatOpenAI({ model: "gpt-4o" });
-		this.agent = new Agent(
-			"open in one action https://www.google.com, https://www.wikipedia.org, https://www.youtube.com, https://www.github.com, https://amazon.com",
-			llm,
-			{
-				browserProfile: new BrowserProfile({
-					headless: false,
-				}),
-			},
-		);
+		this.agent = new Agent({
+			task: "open in one action https://www.google.com, https://www.wikipedia.org, https://www.youtube.com, https://www.github.com, https://amazon.com",
+			llm: llm,
+			browserProfile: new BrowserProfile({
+				headless: false,
+			}),
+		});
 	}
 
 	async runAgent(): Promise<void> {

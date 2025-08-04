@@ -12,7 +12,10 @@ const llm = new ChatOpenRouter({
 
 const task =
 	"Go to example.com, click on the first link, and give me the title of the page";
-const agent = new Agent(task, llm);
+const agent = new Agent({
+	task: task,
+	llm: llm,
+});
 
 async function main() {
 	console.log("---openrouter agent run---");

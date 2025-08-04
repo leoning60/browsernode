@@ -123,10 +123,13 @@ function pixelsToAlgebraic(
 	throw new Error(`Pixel coordinates out of bounds: (${xPx}, ${yPx})`);
 }
 
+/**
+ * Dynamically calculates the size of a chess square in pixels.
+ *
+ * */
 async function calculateSquareSize(
 	browserSession: BrowserSession,
 ): Promise<number | null> {
-	/**Dynamically calculates the size of a chess square in pixels.*/
 	try {
 		const page = await browserSession.getCurrentPage();
 		const boardHTML = await page
@@ -449,8 +452,8 @@ async function main() {
 		apiKey: process.env.OPENAI_API_KEY!,
 	});
 
-	const agent = new Agent(
-		`
+	const agent = new Agent({
+		task: `
         Objective: Play chess against the computer on Lichess and win.
 
         Strategy: Play the Queen's Gambit opening (1. d4 d5 2. c4) as White. Aim for a solid, strategic game.
@@ -482,13 +485,11 @@ async function main() {
 
         *** REMINDER: Use ONLY "analyzeChessBoard" and "executeChessMove" for all chess operations ***
         `,
-		llm,
-		{
-			useVision: true,
-			controller: controller,
-			browserSession: browserSession,
-		},
-	);
+		llm: llm,
+		useVision: true,
+		controller: controller,
+		browserSession: browserSession,
+	});
 
 	try {
 		const result = await agent.run();

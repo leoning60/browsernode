@@ -57,15 +57,13 @@ async function runDownload() {
 
 	try {
 		// Create agent with download task
-		const agent = new Agent(
-			'Go to "https://file-examples.com/" and download the smallest doc file.',
-			llm,
-			{
-				maxActionsPerStep: 8,
-				useVision: true,
-				browserSession: browserSession,
-			},
-		);
+		const agent = new Agent({
+			task: 'Go to "https://file-examples.com/" and download the smallest doc file.',
+			llm: llm,
+			maxActionsPerStep: 8,
+			useVision: true,
+			browserSession: browserSession,
+		});
 
 		console.log("🚀 Starting agent execution...\n");
 

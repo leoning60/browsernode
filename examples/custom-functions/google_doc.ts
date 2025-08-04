@@ -136,7 +136,9 @@ async function main() {
 	});
 
 	// Create and configure the agent
-	const agent = new Agent(task, model, {
+	const agent = new Agent({
+		task: task,
+		llm: model,
 		controller: controller,
 		browserSession: browserSession,
 		useVision: true,

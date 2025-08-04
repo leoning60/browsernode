@@ -12,7 +12,10 @@ const llm = new ChatAnthropic({
 const task = "Go to search.brave.com, search for 'Anthropic claude code'";
 // const task ="Go to amazon.com, search for laptop, sort by best rating, and give me the price of the first result";
 
-const agent = new Agent(task, llm);
+const agent = new Agent({
+	task: task,
+	llm: llm,
+});
 
 async function main() {
 	console.log("---claude-4-sonnet.ts agent run---");

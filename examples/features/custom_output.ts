@@ -54,7 +54,9 @@ async function main() {
 	});
 
 	// Create and run the agent
-	const agent = new Agent(task, model, {
+	const agent = new Agent({
+		task: task,
+		llm: model,
 		controller: controller,
 	});
 

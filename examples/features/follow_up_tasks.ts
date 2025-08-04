@@ -19,7 +19,9 @@ async function main() {
 	`;
 
 	// Create and run the agent
-	const agent = new Agent(task, llm, {
+	const agent = new Agent({
+		task: task,
+		llm: llm,
 		controller: controller,
 		browserProfile: new BrowserProfile({
 			executablePath:

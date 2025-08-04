@@ -10,10 +10,10 @@ async function main() {
 	});
 
 	// Create and run the agent
-	const agent = new Agent(
-		"open 3 tabs with elon musk, trump, and steve jobs, then go back to the first and stop",
-		llm,
-	);
+	const agent = new Agent({
+		task: "open 3 tabs with elon musk, trump, and steve jobs, then go back to the first and stop",
+		llm: llm,
+	});
 
 	console.log("🚀 Starting agent with multi-tab task...");
 	try {

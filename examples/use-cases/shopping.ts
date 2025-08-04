@@ -134,14 +134,12 @@ At this stage, check the basket on the top right (indicates the price) and check
 const browserSession = new BrowserSession();
 
 // Create agent
-const agent = new Agent(
-	task,
-	new ChatOpenAI({ model: "gpt-4o", apiKey: process.env.OPENAI_API_KEY! }),
-	{
-		browserSession: browserSession,
-		useVision: true,
-	},
-);
+const agent = new Agent({
+	task: task,
+	llm: new ChatOpenAI({ model: "gpt-4o", apiKey: process.env.OPENAI_API_KEY! }),
+	browserSession: browserSession,
+	useVision: true,
+});
 
 async function main(): Promise<void> {
 	try {

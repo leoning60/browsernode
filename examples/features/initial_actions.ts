@@ -22,7 +22,9 @@ async function main() {
 	] as Array<Record<string, Record<string, any>>>;
 
 	// Create and run the agent
-	const agent = new Agent("What theories are displayed on the page?", llm, {
+	const agent = new Agent({
+		task: "What theories are displayed on the page?",
+		llm: llm,
 		initialActions: initialActions,
 	});
 

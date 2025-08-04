@@ -175,7 +175,9 @@ async function main() {
 		const task = tasks[i];
 		console.log(`\n🎯 Running task ${i + 1}/${tasks.length}: ${task}`);
 
-		const agent = new Agent(task, llm, {
+		const agent = new Agent({
+			task: task!,
+			llm: llm,
 			controller: controller,
 		});
 

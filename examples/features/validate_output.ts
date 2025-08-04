@@ -67,7 +67,9 @@ async function main() {
 	});
 
 	// Create agent with output validation enabled
-	const agent = new Agent(task, llm, {
+	const agent = new Agent({
+		task: task,
+		llm: llm,
 		controller: controller,
 		browserSession: browserSession,
 		validateOutput: true, // This should catch validation errors
