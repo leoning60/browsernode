@@ -1,5 +1,5 @@
-<img class="light-mode" alt="Shows a black Browsernode Logo in light color mode" src="./static/BrowserNode-Banner-Text-Black-narrow-Transparent.png" alt="Browsernode Logo">
-<img class="dark-mode" alt="Shows a white Browsernode Logo in dark color mode" src="./static/BrowserNode-Banner-Text-White-narrow-Transparent.png" alt="Browsernode Logo">
+<img class="light-mode" alt="Shows a black Browsernode Logo in light color mode" src="https://github.com/user-attachments/assets/9101f203-8fc7-4d64-b116-7ad3db0f6ff0" alt="Browsernode Logo">
+<img class="dark-mode" alt="Shows a white Browsernode Logo in dark color mode" src="https://github.com/user-attachments/assets/2a91581a-623c-40a7-94d0-04aa720e1ff9" alt="Browsernode Logo">
 <style>
   .dark-mode { display: none; }
   @media (prefers-color-scheme: dark) {
