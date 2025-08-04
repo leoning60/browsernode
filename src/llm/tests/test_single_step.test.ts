@@ -12,9 +12,15 @@ import os from 'os';
 // import { ChatOllama } from '../ollama';
 // import { BaseMessage, UserMessage } from '../messages';
 
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
+
 // Mock implementations for testing
 interface BaseMessage { role: string; content: any; }
 interface UserMessage extends BaseMessage { role: 'user'; }
+
 
 class MockChatOpenAI {
 	constructor(public config: any) {}
@@ -229,7 +235,7 @@ describe('Single Step Test Suite', () => {
 			expect(response.usage.total_tokens).toBeGreaterThan(0);
 		} finally {
 			// Cleanup temp directory
-			await fs.rmdir(tempDir, { recursive: true });
+			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	}, 60000);
 
@@ -239,8 +245,8 @@ describe('Single Step Test Suite', () => {
 		
 		try {
 			const llm = new MockChatOllama({
-				model: 'llama3.2',
-				base_url: baseUrl
+				model: 'qwen3:32b',
+				host: baseUrl
 			});
 
 			const agent = new MockAgent('Click the button on the page', llm);
@@ -268,7 +274,7 @@ describe('Single Step Test Suite', () => {
 				console.log(`Response from Ollama: ${JSON.stringify(response.completion)}`);
 			} finally {
 				// Cleanup temp directory
-				await fs.rmdir(tempDir, { recursive: true });
+				await fs.rm(tempDir, { recursive: true, force: true });
 			}
 		} catch (error) {
 			console.log('Ollama not available, skipping test:', error);
@@ -278,7 +284,7 @@ describe('Single Step Test Suite', () => {
 	// Parametrized test equivalent
 	const llmConfigs = [
 		{ name: 'OpenAI', factory: () => new MockChatOpenAI({ model: 'gpt-4o-mini', api_key: process.env.OPENAI_API_KEY }), envVar: 'OPENAI_API_KEY' },
-		{ name: 'Ollama', factory: () => new MockChatOllama({ model: 'llama3.2', base_url: process.env.OLLAMA_BASE_URL || 'http://localhost:11434' }), envVar: null },
+		{ name: 'Ollama', factory: () => new MockChatOllama({ model: 'qwen3:32b', host: process.env.OLLAMA_BASE_URL || 'http://localhost:11434' }), envVar: null },
 	];
 
 	llmConfigs.forEach(({ name, factory, envVar }) => {
@@ -311,7 +317,7 @@ describe('Single Step Test Suite', () => {
 					expect(response.usage.total_tokens).toBeGreaterThan(0);
 				} finally {
 					// Cleanup temp directory
-					await fs.rmdir(tempDir, { recursive: true });
+					await fs.rm(tempDir, { recursive: true, force: true });
 				}
 			} catch (error) {
 				console.log(`${name} not available, skipping test:`, error);

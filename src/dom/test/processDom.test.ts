@@ -44,9 +44,7 @@ describe("DOM Tree Processing", () => {
 		await context.close();
 	});
 
-	test(
-		"should process DOM tree from xxx.com",
-		async () => {
+	test("should process DOM tree from xxx.com", { timeout: 20000 }, async () => {
 			try {
 				// Navigate to the test page
 				console.log("Navigating to xxx.com...");
@@ -111,6 +109,5 @@ describe("DOM Tree Processing", () => {
 				throw error;
 			}
 		},
-		{ timeout: 20000 },
 	);
 });
