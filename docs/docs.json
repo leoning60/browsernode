@@ -1,0 +1,66 @@
+{
+	"$schema": "https://mintlify.com/docs.json",
+	"theme": "mint",
+	"name": "Browsernode",
+	"colors": {
+		"primary": "#F97316",
+		"light": "#FFF7ED",
+		"dark": "#C2410C"
+	},
+	"favicon": "/favicon.png",
+	"navigation": {
+		"groups": [
+			{
+				"group": "Get Started",
+				"pages": ["introduction", "quickstart", "cli"]
+			},
+			{
+				"group": "Customize",
+				"pages": [
+					"customize/supported-models",
+					"customize/agent-settings",
+					"customize/browser-settings",
+					"customize/real-browser",
+					"customize/output-format",
+					"customize/system-prompt",
+					"customize/sensitive-data",
+					"customize/custom-functions"
+				]
+			}
+		]
+	},
+	"logo": {
+		"light": "https://github.com/user-attachments/assets/9101f203-8fc7-4d64-b116-7ad3db0f6ff0",
+		"dark": "https://github.com/user-attachments/assets/2a91581a-623c-40a7-94d0-04aa720e1ff9",
+		"href": "https://browsernode.com"
+	},
+	"background": {
+		"color": {
+			"dark": "#0D0A09"
+		}
+	},
+	"navbar": {
+		"links": [
+			{
+				"label": "Github",
+				"href": "https://github.com/leoning60/browsernode"
+			},
+			{
+				"label": "Twitter",
+				"href": "https://x.com/leoning_ai"
+			}
+		],
+		"primary": {
+			"type": "button",
+			"label": "Join Discord",
+			"href": "https://discord.gg/BWfpMVTQs7"
+		}
+	},
+	"footer": {
+		"socials": {
+			"x": "https://x.com/leoning_ai",
+			"github": "https://github.com/leoning60/browsernode",
+			"linkedin": "https://www.linkedin.com/"
+		}
+	}
+}
