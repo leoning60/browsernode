@@ -97,7 +97,18 @@ class OllamaMessageSerializer {
 	static serialize(message: BaseMessage): Message;
 	/**Serialize a custom message to an Ollama Message.*/
 	static serialize(message: BaseMessage): Message {
-		if (message.constructor.name === "UserMessage") {
+		// Add defensive type checking
+		if (!message || typeof message !== "object") {
+			throw new Error(`Invalid message object: ${JSON.stringify(message)}`);
+		}
+
+		if (!message.role) {
+			throw new Error(
+				`Message missing role property: ${JSON.stringify(message)}`,
+			);
+		}
+
+		if (message.role === "user") {
 			const userMessage = message as UserMessage;
 			const textContent = OllamaMessageSerializer.extractTextContent(
 				userMessage.content,
@@ -114,7 +125,7 @@ class OllamaMessageSerializer {
 			}
 
 			return ollamaMessage;
-		} else if (message.constructor.name === "SystemMessage") {
+		} else if (message.role === "system") {
 			const systemMessage = message as SystemMessage;
 			const textContent = OllamaMessageSerializer.extractTextContent(
 				systemMessage.content,
@@ -124,7 +135,7 @@ class OllamaMessageSerializer {
 				role: "system",
 				content: textContent,
 			};
-		} else if (message.constructor.name === "AssistantMessage") {
+		} else if (message.role === "assistant") {
 			const assistantMessage = message as AssistantMessage;
 			// Handle content
 			let textContent: string | undefined;
@@ -148,10 +159,11 @@ class OllamaMessageSerializer {
 					assistantMessage.toolCalls,
 				);
 			}
-
 			return ollamaMessage;
 		} else {
-			throw new Error(`Unknown message type: ${message.constructor.name}`);
+			throw new Error(
+				`Unknown message role: ${(message as any).role || "undefined"}, message: ${JSON.stringify(message)}`,
+			);
 		}
 	}
 
