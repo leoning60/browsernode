@@ -36,30 +36,13 @@ This opens a chat interface where you can:
 Execute a single task without entering interactive mode:
 
 ```bash
-npx browsernode-cli -p "Search for OpenAI documentation and take a screenshot"
+npx browsernode-cli -p "Search for OpenAI documentation and take a screenshot" --headless
 ```
 
 Options:
 - `-p, --prompt`: The task to execute
 - `--headless`: Run browser in headless mode
 - `--model`: Specify LLM model (default: gpt-4o)
-
-### 3. MCP Server Mode
-
-Run browsernode as a Model Context Protocol server:
-
-```bash
-npx browsernode-cli --mcp   # exoects MCP JSON RPC over stdio
-```
-
-This mode exposes browser automation capabilities as MCP tools that can be used by:
-- Claude Desktop
-- Other MCP-compatible clients
-- Custom applications using the MCP SDK
-
-For MCP integration details, see:
-- [MCP Server Documentation](/customize/mcp-server)
-- [MCP Client Documentation](/customize/mcp-client)
 
 ## Configuration
 
@@ -167,7 +150,12 @@ npx browsernode-cli -p "Go to github.com and search for browsernode"
 
 # Headless one-shot
 npx browsernode-cli --headless -p "Extract prices from example.com/products"
+
+# One-shot task with headless false
+npx browsernode-cli -p "Go to github.com and search for browsernode" --headless false
+
 ```
+
 
 ### With Configuration
 
@@ -182,32 +170,6 @@ BROWSERNODE_HEADLESS=true OPENAI_API_KEY=sk-... npx browsernode-cli -p "Check my
 BROWSERNODE_LLM_MODEL=gpt-4-turbo npx browsernode-cli
 ```
 
-### MCP Server Usage
-
-```bash
-# Start MCP server
-npx browsernode-cli --mcp
-
-# With custom settings
-BROWSERNODE_HEADLESS=false OPENAI_API_KEY=sk-... npx browsernode-cli --mcp
-```
-
-For Claude Desktop integration, add to your Claude Desktop config:
-
-```json
-{
-  "mcpServers": {
-    "browsernode-cli": {
-      "command": "npx",
-      "args": ["browsernode-cli", "--mcp"],
-      "env": {
-        "OPENAI_API_KEY": "sk-...",
-        "BROWSERNODE_HEADLESS": "false"
-      }
-    }
-  }
-}
-```
 
 ## Troubleshooting
 

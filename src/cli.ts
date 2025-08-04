@@ -1233,9 +1233,9 @@ class BrowsernodeApp extends EventEmitter {
 			width: "100%",
 			height: "25%",
 			content: `Run at scale on cloud:    ☁️  https://browsernode.com
-Chat & share on Discord:  🚀  https://discord.gg/ESAUZAdxXY
-Get prompt inspiration:   🦸  https://github.com/browsernode/awesome-prompts
-Report any issues:        🐛  https://github.com/browsernode/browsernode/issues`,
+Chat & share on Discord:  🚀  https://discord.gg/BWfpMVTQs7
+Get prompt inspiration:   🦸  https://github.com/leoning60/browsernode-awesome-prompts
+Report any issues:        🐛  https://github.com/leoning60/browsernode/issues`,
 			tags: true,
 			border: {
 				type: "line",
