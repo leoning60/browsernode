@@ -1,0 +1,233 @@
+---
+title: "CLI"
+description: "Start using the Browsernode CLI"
+icon: "terminal"
+---
+
+# CLI Usage
+
+The `browsernode-cli` command-line interface provides multiple modes of operation for browser automation.
+
+## Installation
+
+Get started with browsernode-cli immediately using `npx`:
+
+```bash
+npx browsernode-cli --help
+```
+
+## Modes of Operation
+
+### 1. Interactive TUI Mode (Default)
+
+Launch an interactive terminal UI where you can chat with the browser automation agent:
+
+```bash
+npx browsernode-cli
+```
+
+This opens a chat interface where you can:
+- Type natural language commands to control the browser
+- See real-time feedback from the agent
+- View browser state and actions being performed
+
+### 2. One-Shot Mode
+
+Execute a single task without entering interactive mode:
+
+```bash
+npx browsernode-cli -p "Search for OpenAI documentation and take a screenshot"
+```
+
+Options:
+- `-p, --prompt`: The task to execute
+- `--headless`: Run browser in headless mode
+- `--model`: Specify LLM model (default: gpt-4o)
+
+### 3. MCP Server Mode
+
+Run browsernode as a Model Context Protocol server:
+
+```bash
+npx browsernode-cli --mcp   # exoects MCP JSON RPC over stdio
+```
+
+This mode exposes browser automation capabilities as MCP tools that can be used by:
+- Claude Desktop
+- Other MCP-compatible clients
+- Custom applications using the MCP SDK
+
+For MCP integration details, see:
+- [MCP Server Documentation](/customize/mcp-server)
+- [MCP Client Documentation](/customize/mcp-client)
+
+## Configuration
+
+Browsernode can be configured through environment variables and a configuration file.
+
+### Configuration File Location
+
+The default configuration file is located at:
+- `~/.config/browsernode/config.json`
+
+You can override this location with:
+- `BROWSERNODE_CONFIG_PATH` environment variable
+- `BROWSERNODE_CONFIG_DIR` environment variable (directory containing config.json)
+
+### Configuration File Format
+
+The configuration uses a database-style format with UUID entries:
+
+```json
+{
+  "browser_profile": {
+    "550e8400-e29b-41d4-a716-446655440000": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "default": true,
+      "createdAt": "2024-01-01T00:00:00",
+      "headless": false,
+      "userDataDir": null,
+      "allowedDomains": ["example.com"],
+      "downloadsPath": "~/Downloads/browsernode"
+    }
+  },
+  "llm": {
+    "6ba7b810-9dad-11d1-80b4-00c04fd430c8": {
+      "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "default": true,
+      "createdAt": "2024-01-01T00:00:00",
+      "apiKey": "your-openai-api-key-here",
+      "model": "gpt-4o",
+      "temperature": 0.7
+    }
+  },
+  "agent": {
+    "6ba7b812-9dad-11d1-80b4-00c04fd430c8": {
+      "id": "6ba7b812-9dad-11d1-80b4-00c04fd430c8",
+      "default": true,
+      "createdAt": "2024-01-01T00:00:00",
+      "maxSteps": 100,
+      "useVision": true
+    }
+  }
+}
+```
+
+Each configuration type (browserProfile, llm, agent) can have multiple entries, with one marked as `default: true`.
+
+### Environment Variables
+
+Environment variables always override config.json values:
+
+#### General Settings
+- `BROWSERNODE_LOGGING_LEVEL`: Logging level (debug, info, warning, error)
+- `BROWSERNODE_CONFIG_PATH`: Full path to config.json file
+- `BROWSERNODE_CONFIG_DIR`: Directory containing config.json
+
+#### Browser Profile Settings
+- `BROWSERNODE_HEADLESS`: Run browser in headless mode (true/false)
+- `BROWSERNODE_ALLOWED_DOMAINS`: Comma-separated list of allowed domains
+- `BROWSERNODE_USER_DATA_DIR`: Chrome user data directory path
+
+#### LLM Settings
+- `OPENAI_API_KEY`: OpenAI API key
+- `ANTHROPIC_API_KEY`: Anthropic API key
+- `BROWSERNODE_LLM_MODEL`: LLM model to use (e.g., gpt-4o, claude-3-opus)
+
+#### MCP-Specific Settings
+When running in MCP mode, these environment variables are particularly useful:
+- `BROWSERNODE_HEADLESS`: Control browser visibility
+- `OPENAI_API_KEY`: Required for agent-based tools
+
+### Browser Profiles Directory
+
+Browser profiles are stored in:
+```
+~/.config/browsernode/profiles/
+├── default/           # Default browser profile
+├── work/             # Custom profile example
+└── research/         # Another custom profile
+```
+
+Each profile directory contains Chrome user data, allowing you to:
+- Maintain separate browser sessions
+- Keep cookies and local storage isolated
+- Use different extensions per profile
+
+## Examples
+
+### Basic Usage
+
+```bash
+# Interactive mode
+npx browsernode-cli
+
+# One-shot task
+npx browsernode-cli -p "Go to github.com and search for browsernode"
+
+# Headless one-shot
+npx browsernode-cli --headless -p "Extract prices from example.com/products"
+```
+
+### With Configuration
+
+```bash
+# Use specific config file
+BROWSERNODE_CONFIG_PATH=~/my-config.json npx browsernode-cli
+
+# Override settings via environment
+BROWSERNODE_HEADLESS=true OPENAI_API_KEY=sk-... npx browsernode-cli -p "Check my email"
+
+# Use different LLM model
+BROWSERNODE_LLM_MODEL=gpt-4-turbo npx browsernode-cli
+```
+
+### MCP Server Usage
+
+```bash
+# Start MCP server
+npx browsernode-cli --mcp
+
+# With custom settings
+BROWSERNODE_HEADLESS=false OPENAI_API_KEY=sk-... npx browsernode-cli --mcp
+```
+
+For Claude Desktop integration, add to your Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "browsernode-cli": {
+      "command": "npx",
+      "args": ["browsernode-cli", "--mcp"],
+      "env": {
+        "OPENAI_API_KEY": "sk-...",
+        "BROWSERNODE_HEADLESS": "false"
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Browser not launching**: Ensure Chrome/Chromium is installed
+2. **API key errors**: Set appropriate API key environment variables
+3. **Permission errors**: Check file permissions in `~/.config/browsernode/`
+
+### Debug Mode
+
+Enable debug logging for troubleshooting:
+
+```bash
+BROWSERNODE_LOGGING_LEVEL=debug npx browsernode-cli
+```
+
+## See Also
+
+- [Getting Started](/quickstart)
+- [MCP Server Documentation](/customize/mcp-server)
+- [MCP Client Documentation](/customize/mcp-client)
+- [Browser Settings](/customize/browser-settings)

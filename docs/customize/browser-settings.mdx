@@ -1,183 +1,992 @@
 ---
 title: "Browser Settings"
-description: "Configure browser behavior and context settings"
+description: "Launch or connect to an existing browser and configure it to your needs."
 icon: "globe"
 ---
 
-Browsernode allows you to customize the browser's behavior through two main configuration classes: `BrowserConfig` and `BrowserContextConfig`. These settings control everything from headless mode to proxy settings and page load behavior.
+Browsernode uses [playwright](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context) (or [patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright)) to manage its connection with a real browser.
 
-<Note>
-  We are currently working on improving how browser contexts are managed. The
-  system will soon transition to a "1 agent, 1 browser, 1 context" model for
-  better stability and developer experience.
-</Note>
+---
 
-# Browser Configuration
-
-The `BrowserConfig` class controls the core browser behavior and connection settings.
+**To launch or connect to a browser**, pass any playwright / browsernode configuration arguments you want to `BrowserSession(...)`:
 
 ```js
-import { BrowserConfig } from "browsernode";
+import { BrowserSession, Agent } from "browsernode";
 
-// Basic configuration
-const config = new BrowserConfig({
-    headless: false,
-    disableSecurity: true
+const browserSession = new BrowserSession({
+    headless: true,
+    viewport: { width: 964, height: 647 },
+    userDataDir: "~/.config/browsernode/profiles/default",
 });
 
-const browser = new Browser(config);
-
-const agent = new Agent(task, llm, {
-    browser: browser,
-    // ...
-});
-agent.run();
+const agent = new Agent("fill out the form on this page", browserSession);
 ```
 
-## Core Settings
+<Note>
+  The new `BrowserSession` & `BrowserProfile` accept all the same arguments that Playwright's [`launchPersistentContext(...)`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context) takes, giving you full control over browser settings at launch. (see below for the full list)
+</Note>
 
-- **headless** (default: `False`)
-  Runs the browser without a visible UI. Note that some websites may detect headless mode.
 
-- **disableSecurity** (default: `True`)
-  Disables browser security features. While this can fix certain functionality issues (like cross-site iFrames), it should be used cautiously, especially when visiting untrusted websites.
+---
 
-### Additional Settings
+## `BrowserSession`
 
-- **extraBrowserArgs** (default: `[]`)
-  Additional arguments are passed to the browser at launch. See the [full list of available arguments](../../src/browser/browser.ts).
+- `BrowserSession(**params)` is browsernode's object that tracks a connection to a running browser. It sets up:
+  - the `playwright`, `browser`, `browserContext`, and `page` objects and tracks which tabs the agent/human are focused on
+  - methods to interact with the browser window, apply config needed by the Agent, and run the `DOMService` for element detection
+  - it can take a `browserProfile=BrowserProfile(...)` template containing some config defaults,session-specific config overrides
 
-- **proxy** (default: `null`)
-  Standard Playwright proxy settings for using external proxy services.
+### Browser Connection Parameters
 
-- **newContextConfig** (default: `BrowserContextConfig()`)
-  Default settings for new browser contexts. See Context Configuration below.
+Provide any one of these options to connect to an existing browser. These options are session-specific and cannot be stored in a `BrowserProfile(...)` template.
+
+#### `wssUrl`
+
+```js
+wssUrl: string | null = null
+```
+
+WSS URL of the playwright-protocol browser server to connect to. See here for [WSS connection instructions](https://docs.browsernode.com/customize/real-browser#method-d%3A-connect-to-remote-playwright-node-js-browser-server-via-wss-url).
+
+#### `cdpUrl`
+
+```js
+cdpUrl: string | null = null
+```
+
+CDP URL of the browser to connect to (e.g. `http://localhost:9222`). See here for [CDP connection instructions](https://docs.browsernode.com/customize/real-browser#method-e%3A-connect-to-remote-browser-via-cdp-url).
+
+#### `browserPid`
+
+```js
+browserPid: number | null = null
+```
+
+PID of a running chromium-based browser process to connect to on localhost. See here for [connection via pid](https://docs.browsernode.com/customize/real-browser#method-c%3A-connect-to-local-browser-using-browser-pid) instructions.
 
 <Note>
   For web scraping tasks on sites that restrict automated access, we recommend
-  using external browser or proxy providers for better reliability.
+  using [our cloud](https://browsernode.com) or an external browser provider for better reliability. 
+  See the [Connect to your Browser](real-browser) guide for detailed connection instructions.
 </Note>
 
-## Alternative Initialization
+### Session-Specific Parameters
 
-These settings allow you to connect to external browser providers or use a local Chrome instance.
-
-### External Browser Provider (wss)
-
-Connect to cloud-based browser services for enhanced reliability and proxy capabilities.
+#### `browserProfile`
 
 ```js
-const config = new BrowserConfig({
-    wssUrl: "wss://your-browser-provider.com/ws"
-});
+browserProfile: BrowserProfile = BrowserProfile()
 ```
 
-- **wssUrl** (default: `null`)
-  WebSocket URL for connecting to external browser providers (e.g., [anchorbrowser.io](https://anchorbrowser.io), steel.dev, browserbase.com, browserless.io, [TestingBot](https://testingbot.com/support/ai/integrations/browsernode)).
+Optional `BrowserProfile` template containing default config to use for the `BrowserSession`. (see below for more info)
+
+#### `playwright`
+
+```js
+playwright: Playwright | null = null
+```
+
+Optional playwright or patchright API client handle to use, the result of `(import { chromium as PlaywrightChromium } from "playwright"; PlaywrightChromium)` or `( import { chromium as PatchrightChromium } from "patchright"; PatchrightChromium)`, which spawns a node.js child subprocess that relays commands to the browser over CDP.
+
+See here for [more detailed usage instructions](https://docs.browsernode.com/customize/real-browser#method-b%3A-connect-using-existing-playwright-objects).
+
+#### `browser`
+
+```js
+browser: Browser | null = null
+```
+
+Playwright Browser object to use (optional). See here for [more detailed usage instructions](https://docs.browsernode.com/customize/real-browser#method-b%3A-connect-using-existing-playwright-objects).
+
+#### `browserContext`
+
+```js
+browserContext: BrowserContext | null = null
+```
+
+Playwright BrowserContext object to use (optional). See here for [more detailed usage instructions](https://docs.browsernode.com/customize/real-browser#method-b%3A-connect-using-existing-playwright-objects).
+
+#### `page` *aka* `agentCurrentPage`
+
+<a name="page"></a><a name="agent-current-page"></a>
+
+```js
+page: Page | null = null
+```
+
+Foreground Page that the agent is focused on, can also be passed as `page=...` as a shortcut. See here for [more detailed usage instructions](https://docs.browsernode.com/customize/real-browser#method-b%3A-connect-using-existing-playwright-objects).
+
+#### `humanCurrentPage`
+
+```js
+humanCurrentPage: Page | null = null
+```
+
+Foreground Page that the human is focused on to start, not necessary to set manually.
+
+#### `initialized`
+
+```js
+initialized: boolean = false
+```
+
+Mark BrowserSession as already initialized, skips launch/connection (not recommended)
+
+
+#### `params`
+
+`BrowserSession` can also accept *all* of the parameters [below](#browserprofile).
+(the parameters *above* this point are specific to `BrowserSession` and cannot be stored in a `BrowserProfile` template)
+
+Extra `**params` passed to `BrowserSession(...)` act as session-specific overrides to the `BrowserProfile(...)` template.
+
+```js
+baseIphone13 = BrowserProfile(
+    storageState='/tmp/auth.json',     # share cookies between parallel browsers
+    **playwright.devices['iPhone 13'],
+    timezoneId='UTC',
+)
+usaPhone = BrowserSession(
+    browserProfile=baseIphone13,
+    timezoneId='America/New_York',     # kwargs override values in baseIphone13
+)
+euPhone = BrowserSession(
+    browserProfile=baseIphone13,
+    timezoneId='Europe/Paris',
+)
+
+usaAgent = Agent(task='show me todays schedule...', browserSession=usaPhone)
+euAgent = Agent(task='show me todays schedule...', browserSession=euPhone)
+await Promise.all([usaAgent.run(), euAgent.run()])
+```
+
+---
+
+
+## `BrowserProfile`
+
+A `BrowserProfile` is a 📋 config template for a 🎭 `BrowserSession(...)`.
+
+It's basically just a typed + validated version of a `dict` to hold config.
+
+When you find yourself storing or re-using many browser configs, you can upgrade from:
+
+```diff
+- config = {key: val, key: val, ...}
+- BrowserSession(**config)
+```
+To this instead:
+```diff
++ config = BrowserProfile(key=val, key=val, ...)
++ BrowserSession(browserProfile=config)
+```
+
+<Tip>
+You don't ever *need* to use a `BrowserProfile`, you can always pass config parameters directly to `BrowserSession`:
+```js
+session = BrowserSession(headless=True, storageState='auth.json', viewport={...}, ...)
+```
+</Tip>
+
+`BrowserProfile` is optional, but it provides a number of benefits over a normal `Record<string, unknown>` for holding config:
+
+- has type hints and pydantic field descriptions that show up in your IDE
+- validates config at runtime quickly without having to start a browser
+- provides helper methods to autodetect screen size, set up local paths, save/load config as json, and more...
+
+<Tip>
+`BrowserProfiles`s are designed to easily be given 🆔 `uuid`s and put in a database + made editable by users. 
+`BrowserSession`s get their own 🆔 `uuid`s and be linked by 🖇 foreign key to whatever `BrowserProfiles` they use.  
+
+This cleanly separates the per-connection rows from the bulky re-usable config and avoids wasting space in your db.
+This is useful because a user may only have 2 or 3 profiles, but they could have 100k+ sessions within a few months.
+</Tip>
+
+
+`BrowserProfile` and `BrowserSession` can both take any of the:
+
+- [Playwright parameters](#playwright)
+- [browsernode parameters](#browsernode-parameters) (extra options we provide on top of `playwright`)
+
+The only parameters `BrowserProfile` can NOT take are the session-specific connection parameters and live playwright objects:
+`cdpUrl`, `wssUrl`, `browserPid`, `page`, `browser`, `browserContext`, `playwright`, etc.
+
+### Basic Example
+
+```js
+import { BrowserProfile } from "browsernode/browser";
+
+const profile = new BrowserProfile(
+    stealth: true,
+    storageState: '/tmp/google_docs_cookies.json',
+    allowedDomains: ['docs.google.com', 'https://accounts.google.com'],
+    viewport: { width: 396, height: 774 },
+    # ... playwright args / browsernode config args ...
+)
+
+const phone1 = new BrowserSession(browserProfile: profile, deviceScaleFactor: 1)
+const phone2 = new BrowserSession(browserProfile: profile, deviceScaleFactor: 2)
+const phone3 = new BrowserSession(browserProfile: profile, deviceScaleFactor: 3)
+```
+
+### browsernode Parameters
+
+These parameters control browsernode-specific features, and are outside the standard playwright set. They can be passed to `BrowserSession(...)` and/or stored in a `BrowserProfile` template.
+
+#### `keepAlive`
+
+```js
+keepAlive: boolean | null = null
+```
+
+If `True` it wont close the browser after the first `agent.run()` ends. Useful for running multiple tasks with the same browser instance. If this is left as `None` and the Agent launched its own browser, the default is to close the browser after the agent completes. If the agent connected to an existing browser then it will leave it open.
+
+#### `stealth`
+
+```js
+stealth: boolean = false
+```
+Set to `True` to use [`patchright`](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) to avoid bot-blocking. (Might cause issues with some sites, requires manual testing.)
+
+<a name="restrict-urls"></a>
+
+#### `allowedDomains`
+
+```js
+allowedDomains: list[str] | None = None
+```
+
+List of allowed domains for navigation. If None, all domains are allowed.
+Example: `['google.com', '*.wikipedia.org']` - Here the agent will only be able to access `google.com` exactly and `wikipedia.org` + `*.wikipedia.org`.
+  
+Glob patterns are supported:
+- `['example.com']` ✅ will match only `https://example.com/*` exactly, subdomains will not be allowed.
+  It's always the most secure to list all the domains you want to give the access to explicitly w/ schemes e.g.
+  `['https://google.com', 'http*://www.google.com', 'https://myaccount.google.com', 'https://mail.google.com', 'https://docs.google.com']`
+- `['*.example.com']` ⚠️ **CAUTION** this will match `https://example.com` and *all* its subdomains.
+  Make sure *all* the subdomains are safe for the agent! `abc.example.com`, `def.example.com`, ..., `useruploads.example.com`, `admin.example.com`
+
+#### `disableSecurity`
+
+```js
+disableSecurity: boolean = false
+```
+
+<Warning>
+⚠️ Setting this to `True` is NOT RECOMMENDED.  
+It completely disables all basic browser security features.
+</Warning>
+
+This option is for debugging and interacting across cross-origin iFrames when there are no cookies or sensitive data in use.
+It's very INSECURE, under no circumstances should you enable this while using real cookies or sensitive data, visiting a single untrusted URL in this mode can immediately compromise all the profile cookies instantly. Consider a less nuclear option like `bypassCsp=True` instead.
+
+#### `deterministicRendering`
+
+```js
+deterministicRendering: boolean = false
+```
+
+<Warning>
+⚠️ Setting this to `True` is NOT RECOMMENDED.  
+It can be glitchy & slow, and it increases chances of getting blocked by anti-bot systems. It's mostly useful for QA applications.
+</Warning>
+
+
+
+It's a shortcut for adding these launch args:
+
+- `--deterministic-mode`
+- `--js-flags=--random-seed=1157259159`
+- `--force-color-profile=srgb`
+- `--font-render-hinting=none`
+- `--force-device-scale-factor=2`
+- `--enable-webgl`
+
+With these options fonts will look slightly worse than macOS and slightly than Windows, but rendering will be more consistent between OSs and runs. The cost is performance and stability. Software rendering is slower, easier to fingerprint as a bot, and sometimes glitchy. You likely *don't need this option* unless you're trying to do screenshot diffing.
+
+#### `highlightElements`
+
+```js
+highlightElements: bool = True
+```
+
+Highlight interactive elements on the screen with colorful bounding boxes.
+
+#### `viewportExpansion`
+
+```js
+viewportExpansion: int = 500
+```
+
+Viewport expansion in pixels. With this you can control how much of the page is included in the context of the LLM:
+- `-1`: All elements from the entire page will be included, regardless of visibility (highest token usage but most complete).
+- `0`: Only elements which are currently visible in the viewport will be included.
+- `500` (default): Elements in the viewport plus an additional 500 pixels in each direction will be included, providing a balance between context and token usage.
+
+#### `includeDynamicAttributes`
+
+```js
+includeDynamicAttributes: boolean = true
+```
+
+Include dynamic attributes in selectors for better element targeting.
+
+#### `minimumWaitPageLoadTime`
+
+```js
+minimumWaitPageLoadTime: number = 0.25
+```
+
+Minimum time to wait before capturing page state for LLM input.
+
+#### `waitForNetworkIdlePageLoadTime`
+
+```js
+waitForNetworkIdlePageLoadTime: number = 0.5
+```
+
+Time to wait for network activity to cease. Increase to 3-5s for slower websites. This tracks essential content loading, not dynamic elements like videos.
+
+#### `maximumWaitPageLoadTime`
+
+```js
+maximumWaitPageLoadTime: number = 5.0
+```
+
+Maximum time to wait for page load before proceeding.
+
+#### `waitBetweenActions`
+
+```js
+waitBetweenActions: number = 0.5
+```
+
+Time to wait between agent actions.
+
+#### `cookiesFile`
+
+```js
+cookiesFile: string | null = null
+```
+
+JSON file path to save cookies to.
+
+<Warning>
+This option is DEPRECATED. Use [`storageState`](#storageState) instead, it's the standard playwright format and also supports `localStorage` and `indexedDB`!
+
+The library will automatically save a new `storageState.json` next to any `cookiesFile` path you provide, just use `storageState='path/to/storageState.json' to switch to the new format:
+
+`cookiesFile.json`: `[{cookie}, {cookie}, {cookie}]`  
+⬇️
+`storage_state.json`: `{"cookies": [{cookie}, {cookie}, {cookie}], "origins": {... optional localstorage state ...}}`
+
+Or run `playwright open https://example.com/ --save-storage=storage_state.json` and log into any sites you need to generate a fresh storage state file.
+</Warning>
+
+
+#### `profileDirectory`
+
+```js
+profileDirectory: string = 'Default'
+```
+
+Chrome profile subdirectory name inside of your `userDataDir` (e.g. `Default`, `Profile 1`, `Work`, etc.).
+No need to set this unless you have multiple profiles set up in a single `userDataDir` and need to use a specific one.
+
+#### `windowPosition`
+
+```js
+windowPosition: Record<string, number> | null = {"width": 0, "height": 0}
+```
+
+Window position from top-left corner.
+
+#### `saveRecordingPath`
+
+```js
+saveRecordingPath: string | null = null
+```
+
+Directory path for saving video recordings.
+
+#### `tracePath`
+
+```js
+tracePath: string | null = null
+```
+
+Directory path for saving Agent trace files. Files are automatically named as `{tracePath}/{contextId}.zip`.
+
+
+---
+
+<a name="playwright-parameters"></a><a name="playwright"></a>
+
+### Playwright Launch Options
+
+
+All the parameters below are standard playwright parameters and can be passed to both `BrowserSession` and `BrowserProfile`.
+They are defined in `browsernode/browser/profile.ts`. See here for the [official Playwright documentation](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context) for all of these options.
+
+#### `headless`
+
+```js
+headless: boolean | null = null
+```
+
+Runs the browser without a visible UI. If None, auto-detects based on display availability. If you set `headless=False` on a server with no monitor attached, the browser will fail to launch (use `xvfb` + vnc to give a headless server a virtual display you can remote control). 
+
+`headless=False` is recommended for maximum stealth and is required for human-in-the-loop workflows.
+
+#### `channel`
+
+```js
+channel: BrowserChannel = 'chromium'
+```
+
+Browser channel: `['chromium']` (default when `stealth=False`), `'chrome'` (default when `stealth=True`), `'chrome-beta'`, `'chrome-dev'`, `'chrome-canary'`, `'msedge'`, `'msedge-beta'`, `'msedge-dev'`, `'msedge-canary'`
+
+Don't worry, other chromium-based browsers not in this list (e.g. `brave`) are still supported if you provide your own [`executablePath`](#executablePath), just set it to `chromium` for those.
+
+#### `executablePath`
+
+```js
+executablePath: string | Path | null = null
+```
+
+Path to browser executable for custom installations.
+
+#### `userDataDir`
+
+```js
+userDataDir: string | Path | null = '~/.config/browsernode/profiles/default'
+```
+
+Directory for browser profile data. Set to `None` to use an ephemeral temporary profile (aka incognito mode).
+
+Multiple running browsers **cannot share a single `userDataDir` at the same time**. You must set it to `None` or
+provide a unique `userDataDir` per-session if you plan to run multiple browsers.
+
+The browser version run must always be equal to or greater than the version used to create the `userDataDir`.
+If you see errors like `Failed to parse Extensions` or similar and failures when launching, you're attempting to run an older browser with an incompatible `userDataDir` that's already been migrated to a newer schema version.
+
+#### `args`
+
+```js
+args: string[] = []
+```
+Additional command-line arguments to pass to the browser. See here for the [full list of available chrome launch options](https://peter.sh/experiments/chromium-command-line-switches/).
+
+
+
+#### `ignoreDefaultArgs`
+
+```js
+ignoreDefaultArgs: list[str] | bool = ['--enable-automation', '--disable-extensions']
+```
+
+List of default CLI args to stop playwright from including when launching chrome. Set it to `True` to disable *all* default options (not recommended).
+
+#### `env`
+
+```js
+env: Record<string, string> = {}
+```
+
+Extra environment variables to set when launching browser. e.g. `{'DISPLAY': '1'}` to use a specific X11 display.
+
+#### `chromiumSandbox`
+
+```js
+chromiumSandbox: bool = not IN_DOCKER
+```
+
+Whether to enable Chromium sandboxing (recommended for security). Should always be `False` when running inside Docker
+because Docker provides its own sandboxing can conflict with Chrome's.
+
+#### `devtools`
+
+```js
+devtools: bool = False
+```
+
+Whether to open DevTools panel automatically (only works when `headless=False`).
+
+#### `slowMo`
+
+```js
+slowMo: float = 0
+```
+
+Slow down actions by this many milliseconds.
+
+#### `timeout`
+
+```js
+timeout: float = 30000
+```
+
+Default timeout in milliseconds for connecting to a remote browser.
+
+#### `acceptDownloads`
+
+```js
+acceptDownloads: bool = True
+```
+
+Whether to automatically accept all downloads.
+
+#### `proxy`
+
+```js
+proxy: Record<string, unknown> | null = null
+```
+
+Proxy settings. Example: `{"server": "http://proxy.com:8080", "username": "user", "password": "pass"}`. 
+
+#### `permissions`
+
+```js
+permissions: string[] = ['clipboard-read', 'clipboard-write', 'notifications']
+```
+
+Browser permissions to grant. See here for the [full list of available permission](https://playwright.dev/docs/api/class-browsercontext#browser-context-grant-permissions).
+
+#### `storageState`
+
+```js
+storageState: string | Path | Record<string, unknown> | null = null
+```
+
+Browser storage state (cookies, localStorage). Can be file path or dict. See here for the [Playwright `storageState` documentation](https://playwright.dev/docs/api/class-browsercontext#browser-context-storage-state) on how to use it.
+This option is only applied when launching a new browser using the default builtin playwright chromium and `userDataDir=None` is set.
+
+```bash
+# to create a storage state file, run the following and log into the sites you need once the browser opens:
+playwright open https://example.com/ --save-storage=./storageState.json
+# then setup a BrowserSession with storageState='./storageState.json' and userDataDir=None to use it
+```
+
+### Playwright Timing Settings
+
+These control how the browser waits for CDP API calls to complete and pages to load.
+
+#### `defaultTimeout`
+
+```js
+defaultTimeout: number | null = null
+```
+
+Default timeout for Playwright operations in milliseconds (e.g. `10000` if you want 10s).
+
+#### `defaultNavigationTimeout`
+
+```js
+defaultNavigationTimeout: number | null = null
+```
+
+Default timeout for page navigation in milliseconds (e.g. `30000` if you want 30s).
+
+
+### Playwright Viewport Options
+
+Configure browser window size, viewport, and display properties:
+
+#### `userAgent`
+
+```js
+userAgent: string | null = null
+```
+
+Specific user agent to use in this context. See [`playwright.devices`](https://playwright.dev/docs/emulation).
+
+#### `isMobile`
+
+```js
+isMobile: boolean = false
+```
+
+Whether the meta viewport tag is taken into account and touch events are enabled.
+
+#### `hasTouch`
+
+```js
+hasTouch: boolean = false
+```
+
+Specifies if viewport supports touch events.
+
+#### `geolocation`
+
+```js
+geolocation: Record<string, number> | null = null
+```
+
+Geolocation coordinates. Example: `{"latitude": 59.95, "longitude": 30.31667}`
+
+#### `locale`
+
+```js
+locale: string | null = null
+```
+
+Specify user locale, for example `en-GB`, `de-DE`, etc. Locale will affect the `navigator.language` value, `Accept-Language` request header value as well as number and date formatting rules.
+
+#### `timezoneId`
+
+```js
+timezoneId: string | null = null
+```
+
+Timezone identifier (e.g. `'America/New_York'` or `'UTC'`).
+
+#### `windowSize`
+
+```js
+windowSize: Record<string, number> | null = null
+```
+
+Browser window size for headful mode. Example: `{"width": 1920, "height": 1080}`
+
+#### `viewport`
+
+```js
+viewport: Record<string, number> | null = null
+```
+
+Viewport size with `width` and `height`. Example: `{"width": 1280, "height": 720}`
+
+#### `noViewport`
+
+```js
+noViewport: boolean | null = not headless
+```
+
+Disable fixed viewport. Content will resize with window.
+
+*Tip:* don't use this parameter, it's a playwright standard parameter but it's redundant and only serves to override the `viewport` setting above.
+A viewport is *always* used in headless mode regardless of this setting, and is *never* used in headful mode unless you pass `viewport={width, height}` explicitly.
+
+#### `deviceScaleFactor`
+
+```js
+deviceScaleFactor: number | null = null
+```
+
+Device scale factor (DPI). Useful for high-resolution screenshots (set it to 2 or 3).
+
+#### `screen`
+
+```js
+screen: Record<string, number> | null = null
+```
+
+Screen size available to browser. Auto-detected if not specified.
+
+#### `colorScheme`
+
+```js
+colorScheme: ColorScheme = 'light'
+```
+
+Preferred color scheme: `'light'`, `'dark'`, `'no-preference'`
+
+#### `contrast`
+
+```js
+contrast: Contrast = 'no-preference'
+```
+
+Contrast preference: `'no-preference'`, `'more'`, `'null'`
+
+#### `reducedMotion`
+
+```js
+reducedMotion: ReducedMotion = 'no-preference'
+```
+
+Reduced motion preference: `'reduce'`, `'no-preference'`, `'null'`
+
+#### `forcedColors`
+
+```js
+forcedColors: ForcedColors = 'none'
+```
+
+Forced colors mode: `'active'`, `'none'`, `'null'`
+
+### Playwright Security Options
+
+> See `allowedDomains` above too!
+
+#### `offline`
+
+```js
+offline: boolean = false
+```
+
+Emulate network being offline.
+
+#### `httpCredentials`
+
+```js
+httpCredentials: Record<string, unknown> | null = null
+```
+
+Credentials for HTTP authentication.
+
+#### `extraHTTPHeaders`
+
+```js
+extraHTTPHeaders: Record<string, string> = {}
+```
+
+Additional HTTP headers to be sent with every request.
+
+#### `ignoreHTTPSErrors`
+
+```js
+ignoreHTTPSErrors: boolean = false
+```
+
+Whether to ignore HTTPS errors when sending network requests.
+
+#### `bypassCSP`
+
+```js
+bypassCSP: boolean = false
+```
+
+<Warning>
+Enabling this can increase security risk and makes the bot very easy to fingerprint. (Cloudflare, Datadome, etc. will block you)
+</Warning>
+
+Toggles bypassing Content-Security-Policy. Enabling reduces some CSP-related errors that can arise from automation scripts injected into pages with strict policies that forbid inline scripts.
+
+#### `javaScriptEnabled`
+
+```js
+javaScriptEnabled: boolean = true
+```
+
+<Warning>
+Not recommended, untested with browsernode and likely breaks things.
+</Warning>
+
+Whether or not to enable JavaScript in the context.
+
+#### `serviceWorkers`
+
+```js
+serviceWorkers: ServiceWorkers = 'allow'
+```
+
+Whether to allow sites to register Service workers: `'allow'`, `'block'`
+
+#### `baseURL`
+
+```js
+baseURL: string | null = null
+```
+
+Base URL to be used in `page.goto()` and similar operations.
+
+#### `strictSelectors`
+
+```js
+strictSelectors: boolean = false
+```
+
+If true, selector passed to Playwright methods will throw if more than one element matches.
+
+#### `clientCertificates`
+
+```js
+clientCertificates: ClientCertificate[] = []
+```
+
+Client certificates to be used with requests.
+
+
+### Playwright Recording Options
+
+Note: browsernode also provides some of our own recording-related options not listed below (see above).
+
+#### `recordVideoDir`
+
+<a name="record-video-dir"></a>
+<a name="save-recording-path"></a>
+
+```js
+recordVideoDir: string | null = null
+```
+
+Directory to save `.webm` video recordings. [Playwright Docs: `recordVideoDir`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context-option-record-video-dir)
 
 <Note>
-  This overrides local browser settings and uses the provider's configuration.
-  Refer to their documentation for settings.
+This parameter also has an alias `saveRecordingPath` for backwards compatibility with past versions, but we recommend using the standard Playwright name `recordVideoDir` going forward.
 </Note>
 
-### External Browser Provider (cdp)
-
-Connect to cloud or local Chrome instances using Chrome DevTools Protocol (CDP) for use with tools like `headless-shell` or `browserless`.
+#### `recordVideoSize`
 
 ```js
-const config = new BrowserConfig({
-    cdpUrl: "http://localhost:9222"
-});
+recordVideoSize: Record<string, number> | null = null
+
 ```
 
-- **cdpUrl** (default: `null`)
-  URL for connecting to a Chrome instance via CDP. Commonly used for debugging or connecting to locally running Chrome instances.
+Video size. Example: `{"width": 1280, "height": 720}`
 
-### Local Chrome Instance (binary)
+#### `recordHarPath`
 
-Connect to your existing Chrome installation to access saved states and cookies.
+<a name="record-har-path"></a>
+<a name="save-har-path"></a>
 
 ```js
-const config = new BrowserConfig({
-    browserInstancePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-});
+recordHarPath: string | null = null
 ```
 
-- **browserInstancePath** (default: `null`)
-  Path to connect to an existing Browser installation. Particularly useful for workflows requiring existing login states or browser preferences.
+Path to save `.har` network trace files. [Playwright Docs: `recordHarPath`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context-option-record-har-path)
 
-<Note>This will overwrite other browser settings.</Note>
+<Note>
+This parameter also has an alias `saveHarPath` for backwards compatibility with past versions, but we recommend using the standard Playwright name `recordHarPath` going forward.
+</Note>
 
-# Context Configuration
-
-The `BrowserContextConfig` class controls settings for individual browser contexts.
+#### `recordHarContent`
 
 ```js
-import { BrowserContextConfig } from "browsernode";
+recordHarContent: RecordHarContent = 'embed'
+```
 
-const config = new BrowserContextConfig({
-    cookiesFile: "path/to/cookies.json",
+How to persist HAR content: `'omit'`, `'embed'`, `'attach'`
+
+#### `recordHarMode`
+
+```js
+recordHarMode: RecordHarMode = 'full'
+```
+
+HAR recording mode: `'full'`, `'minimal'`
+
+#### `recordHarOmitContent`
+
+```js
+recordHarOmitContent: boolean = false
+```
+
+Whether to omit request content from the HAR.
+
+#### `recordHarUrlFilter`
+
+```js
+recordHarUrlFilter: string | RegExp | null = null
+```
+
+URL filter for HAR recording.
+
+#### `downloadsPath`
+
+```js
+downloadsPath: string | null = '~/.config/browsernode/downloads'
+```
+
+(aliases: `downloadsDir`, `saveDownloadsPath`)
+
+Local filesystem directory to save browser file downloads to.
+
+#### `tracesDir`
+
+<a name="traces-dir"></a>
+<a name="trace-path"></a>
+
+```js
+tracesDir: string | null = null
+```
+
+Directory to save all-in-one trace files. Files are automatically named as `{tracesDir}/{contextId}.zip`. [Playwright Docs: `tracesDir`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context-option-traces-dir)
+
+<Note>
+This parameter also has an alias `tracePath` for backwards compatibility with past versions, but we recommend using the standard Playwright name `tracesDir` going forward.
+</Note>
+
+#### `handleSIGHUP`
+
+```js
+handleSIGHUP: boolean = true
+```
+
+Whether playwright should swallow SIGHUP signals and kill the browser.
+
+#### `handleSIGINT`
+
+```js
+handleSIGINT: boolean = false
+```
+
+Whether playwright should swallow SIGINT signals and kill the browser.
+
+#### `handleSIGTERM`
+
+```js
+handleSIGTERM: boolean = false
+```
+
+Whether playwright should swallow SIGTERM signals and kill the browser.
+
+---
+
+## Full Example
+
+```js
+import { BrowserSession, BrowserProfile, Agent } from "browsernode";
+
+browserProfile = BrowserProfile(
+    headless: false,
+    storageState: "path/to/storage_state.json",
     waitForNetworkIdlePageLoadTime: 3.0,
-    browserWindowSize: { width: 1280, height: 1100 },
+    viewport: { width: 1280, height: 1100 },
     locale: 'en-US',
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36',
     highlightElements: true,
     viewportExpansion: 500,
-    allowedDomains: ['google.com', 'wikipedia.org'],
+    allowedDomains: ['*.google.com', 'http*://*.wikipedia.org'],
+    userDataDir: null,
 )
 
-const browser = new Browser(config);
-const context = await browser.newContext(config);
+const browserSession = new BrowserSession(
+    browserProfile: browserProfile,
+    headless: true,                          # extra kwargs to the session override the defaults in the profile
+)
 
+# you can drive a session without the agent / reuse it between agents
+await browserSession.start()
+const page = await browserSession.getCurrentPage()
+await page.goto('https://example.com/first/page')
 
-async function run_search() {
-	const agent = new Agent(task, llm, {
-		browserContext: context,
-	});
-	await agent.run();
+async function runSearch(): Promise<void> {
+    const agent = new Agent(
+        task: 'Your task',
+        llm: llm,
+        page: page,                        # optional: pass a specific playwright page to start on
+        browserSession: browserSession,  # optional: pass an existing browser session to an agent
+    )
 }
-
-run_search();
 ```
 
-## Configuration Options
+---
 
-### Page Load Settings
+## Summary
 
-- **minimumWaitPageLoadTime** (default: `0.5`)
-  Minimum time to wait before capturing page state for LLM input.
+- **BrowserSession** (defined in `browsernode/src/browser/session.ts`) handles the live browser connection and runtime state
+- **BrowserProfile** (defined in `browsernode/src/browser/profile.ts`) is a template that can store default config parameters for a `BrowserSession(...)`
 
-- **waitForNetworkIdlePageLoadTime** (default: `1.0`)
-  Time to wait for network activity to cease. Increase to 3-5s for slower websites. This tracks essential content loading, not dynamic elements like videos.
+Configuration parameters defined in both scopes consumed by these calls depending on whether we're connecting/launching:
 
-- **maximumWaitPageLoadTime** (default: `5.0`)
-  Maximum time to wait for page load before proceeding.
+- `BrowserConnectArgs` - args for `BrowserType.connect(...)`
+- `BrowserLaunchArgs` - args for `BrowserType.launch(...)`
+- `BrowserNewContextArgs` - args for `BrowserType.newContext(...)`
+- `BrowserLaunchPersistentContextArgs` - args for `BrowserType.launchPersistentContext(...)`
+- browsernode's own internal methods
 
-### Display Settings
+For more details on Playwright's browser context options, see their [launch args documentation](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context).
 
-- **browserWindowSize** (default: `{'width': 1280, 'height': 1100}`)
-  Browser window dimensions. The default size is optimized for general use cases and interaction with common UI elements like cookie banners.
-
-- **locale** (default: `null`)
-  Specify user locale, for example en-GB, de-DE, etc. Locale will affect the navigator. Language value, Accept-Language request header value as well as number and date formatting rules. If not provided, defaults to the system default locale.
-
-- **highlightElements** (default: `True`)
-  Highlight interactive elements on the screen with colorful bounding boxes.
-
-- **viewportExpansion** (default: `500`)
-  Viewport expansion in pixels. With this you can controll how much of the page is included in the context of the LLM. If set to -1, all elements from the entire page will be included (this leads to high token usage). If set to 0, only the elements which are visible in the viewport will be included.
-  Default is 500 pixels, that means that we inlcude a little bit more than the visible viewport inside the context.
-
-### Restrict URLs
-
-- **allowedDomains** (default: `null`)
-  List of allowed domains that the agent can access. If None, all domains are allowed.
-  Example: ['google.com', 'wikipedia.org'] - Here the agent will only be able to access google and wikipedia.
-
-### Debug and Recording
-
-- **saveRecordingPath** (default: `null`)
-  Directory path for saving video recordings.
-
-- **tracePath** (default: `null`)
-  Directory path for saving trace files. Files are automatically named as `{trace_path}/{context_id}.zip`.
+---

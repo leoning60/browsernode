@@ -35,18 +35,19 @@ Then you can use the agent as follows:
 
 
 ```javascript
-import { ChatOpenAI } from "@langchain/openai";
 import { Agent } from "browsernode";
+import { ChatOpenAI } from "browsernode/llm";
 
 const llm = new ChatOpenAI({
-	modelName: "gpt-4o",
-	streaming: true,
-	openAIApiKey: process.env.OPENAI_API_KEY,
+	model: "gpt-4.1",
+	temperature: 0.0,
+	apiKey: process.env.OPENAI_API_KEY,
 });
 
-const task = "Search for the latest tesla stock price";
+const task = "Compare the price of gpt-4o and DeepSeek-V3";
 const agent = new Agent(task, llm);
-agent.run();
+const history = await agent.run();
+console.log(history.usage);
 ```
 
 ## Set up your LLM API keys
@@ -64,11 +65,10 @@ OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 ```
 
-For other LLM models you can refer to the [Langchain documentation](https://js.langchain.com/docs/integrations/chat/) to find how to set them up with their specific API keys.
-
+For other LLM models you can refer to the [Supported Models](/customize/supported-models) page to find how to set them up with their specific API keys.
 
 ## Run the example
 
 ```bash
-npx tsx examples/example.ts
+npx tsx examples/simple.ts
 ```

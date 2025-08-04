@@ -5,65 +5,89 @@ icon: "code"
 ---
 
 ## Custom output format
-With [this example](https://github.com/) you can define what output format the agent should return to you.
+With [this example](https://github.com/leoning60/browsernode/blob/main/examples/features/custom_output.ts) you can define what output format the agent should return to you.
 
-```ts
-import { ChatOpenAI } from "@langchain/openai";
+```js
 import { Agent, Controller } from "browsernode";
+import { ChatOpenAI } from "browsernode/llm";
 import { z } from "zod";
 
-// use zod to define the output format
+// Zod schemas for Post and Posts
 const PostSchema = z.object({
-	post_title: z.string(),
-	post_url: z.string(),
-	num_comments: z.number(),
-	hours_since_post: z.number(),
+	post_title: z.string().describe("The title of the post"),
+	post_url: z.string().describe("The URL of the post"),
+	num_comments: z.number().describe("Number of comments on the post"),
+	hours_since_post: z.number().describe("Hours since the post was created"),
 });
 
 const PostsSchema = z.object({
-	posts: z.array(PostSchema),
+	posts: z.array(PostSchema).describe("Array of posts from Hacker News"),
 });
 
-// Create controller with output model
-const controller = new Controller([], PostsSchema);
+type Post = z.infer<typeof PostSchema>;
+type Posts = z.infer<typeof PostsSchema>;
 
 async function main() {
-	const task =
-		"Go to https://news.ycombinator.com/ and give me the first 5 posts.";
+	// Check for required environment variable
+	if (!process.env.OPENAI_API_KEY) {
+		throw new Error("OPENAI_API_KEY is not set in environment variables");
+	}
 
+	// Initialize controller with output model for structured data extraction
+	const controller = new Controller([], PostsSchema);
+
+	// Task to extract structured data from Hacker News
+	const task = "Go to hackernews show hn and give me the first 5 posts";
+
+	// Initialize the language model
 	const model = new ChatOpenAI({
-		modelName: "gpt-4o",
+		model: "gpt-4o",
 		apiKey: process.env.OPENAI_API_KEY,
 	});
 
+	// Create and run the agent
 	const agent = new Agent(task, model, {
 		controller: controller,
 	});
 
-	const history = await agent.run();
+	try {
+		console.log("🚀 Starting agent to extract Hacker News posts...\n");
 
-	const result = history.finalResult();
-	if (result) {
-		// console.log("result:", result);
-		try {
-			const parsed: z.infer<typeof PostsSchema> = JSON.parse(result);
+		const history = await agent.run();
 
-			for (const post of parsed.posts) {
-				console.log("\n--------------------------------");
+		// Extract the final result from the agent history
+		const result = history.finalResult();
+
+		if (result) {
+			// Parse the structured result using Zod
+			const parsed: Posts = PostsSchema.parse(JSON.parse(result));
+
+			console.log("🎯 Extracted Posts from Hacker News Show HN:\n");
+
+			// Display each post with formatting
+			for (const [index, post] of parsed.posts.entries()) {
+				console.log(`\n${index + 1}. --------------------------------`);
 				console.log(`Title:            ${post.post_title}`);
 				console.log(`URL:              ${post.post_url}`);
 				console.log(`Comments:         ${post.num_comments}`);
 				console.log(`Hours since post: ${post.hours_since_post}`);
 			}
-		} catch (error) {
-			console.error("Failed to parse result:", error);
-			console.log("Raw result:", result);
+
+			console.log("\n✅ Successfully extracted structured data!");
+		} else {
+			console.log("❌ No result returned from agent");
 		}
-	} else {
-		console.log("No result");
+	} catch (error) {
+		console.error("💥 Error running agent:", error);
+
+		// If it's a Zod validation error, provide more details
+		if (error instanceof z.ZodError) {
+			console.error("Validation errors:", error.errors);
+		}
 	}
 }
 
+// Run the main function
 main().catch(console.error);
 
 ```

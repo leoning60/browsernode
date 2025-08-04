@@ -22,26 +22,10 @@ You can customize the system prompt in two ways:
 To add additional instructions to the default system prompt:
 
 ```js
-import { Agent } from "browsernode";
-import { ChatOpenAI } from "@langchain/openai";
-
-const extend_system_message = `
+const extendSystemMessage = `
 REMEMBER the most important RULE:
 ALWAYS open first a new tab and go first to url wikipedia.com no matter the task!!!
 `;
-
-const task = "after open 3 tabs, end the task";
-const model = new ChatOpenAI({
-	modelName: "gpt-4o",
-	apiKey: process.env.OPENAI_API_KEY,
-});
-
-// Create agent with extended system prompt
-const agent = new Agent(task, model, {
-	extendSystemMessage: extend_system_message,
-});
-agent.run();
-
 ```
 
 ### Override System Prompt
@@ -56,23 +40,44 @@ Anyway, to override the default system prompt:
 
 ```js
 import { Agent } from "browsernode";
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI } from "browsernode/llm";
 
-const override_system_message = `
-REMEMBER the most important RULE:
-ALWAYS open first a new tab and go first to url wikipedia.com no matter the task!!!
+const overrideSystemMessage = `
+You are an AI agent that helps users with web browsing tasks.
+
+[Your complete custom instructions here...]
 `;
 
-const task = "after open 3 tabs, end the task";
-const model = new ChatOpenAI({
-	modelName: "gpt-4o",
-	apiKey: process.env.OPENAI_API_KEY,
-});
+// Create agent with custom system prompt
+const agent = new Agent(
+    "Your task here",
+    llm,
+    {
+        overrideSystemMessage: overrideSystemMessage,
+    }
+);
 
-// Create agent with extended system prompt
-const agent = new Agent(task, model, {
-	overrideSystemMessage: override_system_message,
-});
-agent.run();
+```
+### Extend Planner System Prompt
 
+You can customize the behavior of the planning agent by extending its system prompt:
+
+```js
+const extendPlannerSystemMessage = `
+PRIORITIZE gathering information before taking any action.
+Always suggest exploring multiple options before making a decision.
+`;
+
+// Create agent with extended planner system prompt
+const llm = new ChatOpenAI(model: "gpt-4o");
+const plannerLlm = new ChatOpenAI(model: "gpt-4o-mini");
+
+const agent = new Agent(
+    "Your task here",
+    llm,
+    {
+        plannerLlm: plannerLlm,
+        extendPlannerSystemMessage: extendPlannerSystemMessage,
+    }
+);
 ```

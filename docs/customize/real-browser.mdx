@@ -1,56 +1,418 @@
 ---
 title: "Connect to your Browser"
-description: "With this you can connect to your real browser, where you are logged in with all your accounts."
+description: "Connect to a remote browser or launch a new local browser."
 icon: "computer"
 ---
 
 ## Overview
 
-You can connect the agent to your real Chrome browser instance, allowing it to access your existing browser profile with all your logged-in accounts and settings. This is particularly useful when you want the agent to interact with services where you're already authenticated.
+Browsernode supports a wide variety of ways to launch or connect to a browser:
 
-<Note>
-  First make sure to close all running Chrome instances.
-</Note>
+- Launch a new local browser using playwright/patchright chromium (the default)
+- Connect to a remote browser using CDP or WSS
+- Use an existing playwright `Page`, `Browser`, or `BrowserContext` object
+- Connect to a local browser already running using `browserPid`
 
-## Basic Configuration
+<Tip>
+Don't want to manage your own browser infrastructure? Try [☁️ Browsernode Cloud](https://browsernode.com) ➡️
 
-To connect to your real Chrome browser, you'll need to specify the path to your Chrome executable when creating the Browser instance:
+We provide automatic CAPTCHA solving, proxies, human-in-the-loop automation, and more!
+
+</Tip>
+
+## Connection Methods
+
+### Method A: Launch a New Local Browser (Default)
+
+Launch a local browser using built-in default (playwright `chromium`) or a provided `executablePath`:
 
 ```js
-import { ChatOpenAI } from "@langchain/openai";
-import { Agent, Browser, BrowserConfig } from "browsernode";
+import { Agent, BrowserSession } from "browsernode";
 
-const llm = new ChatOpenAI({
-	modelName: "gpt-4o",
-	temperature: 0.0,
-	streaming: true,
-	openAIApiKey: process.env.OPENAI_API_KEY,
-});
+// If no executablePath provided, uses Playwright/Patchright's built-in Chromium
+const browserSession = new BrowserSession(
+    // Path to a specific Chromium-based executable (optional)
+    executablePath='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',  // macOS
+    // For Windows: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+    // For Linux: '/usr/bin/google-chrome'
 
-const task = "Search for the latest nvidia stock price";
-// const task =" Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.";
+    // Use a specific data directory on disk (optional, set to None for incognito)
+    userDataDir='~/.config/browsernode/profiles/default',   // this is the default
+    // ... any other BrowserProfile or playwright launchPersistentContext config...
+    // headless: false,
+)
 
-// Create browser configuration
-const config = new BrowserConfig({
-	headless: false, // Make sure the browser is visible
-	browserClass: "chromium", // Use Chrome/Chromium
-	browserInstancePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // Path to Chrome on macOS
-	extraBrowserArgs: [
-		"--start-maximized",
-		"--user-data-dir=/tmp/chrome-browsernode", // Use a separate user data directory
-		"--download-path=/tmp/chrome-browsernode/Downloads",
-	], // Optional: start with maximized window
-	forceKeepBrowserAlive: true, // Add this option to prevent closing browser when using existing instance
-});
-
-const agent = new Agent(task, llm, {
-	browser: new Browser(config),
-});
-// Run the agent task and handle process termination
-await agent.run();
+const agent = new Agent(
+    task: "Your task here",
+    llm: llm,
+    browserSession: browserSession,
+)
 ```
 
+We support most `chromium`-based browsers in `executablePath`, including [Brave](https://github.com/leoning6/browsernode/tree/main/examples/browser/stealth.ts), [patchright chromium](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright), [rebrowser](https://rebrowser.net/), Edge, and more. See [`examples/browser/stealth.ts`](https://github.com/leoning6/browsernode/tree/main/examples/browser) for more. We do not support Firefox or Safari at the moment.
+
+<Warning>
+  [As of Chrome v136](),
+  driving browsers with the default profile is [no longer
+  supported](https://developer.chrome.com/blog/remote-debugging-port) for
+  security reasons. browsernode has transitioned to creating a new dedicated
+  profile for agents in: `~/.config/browsernode/profiles/default`. You can [open
+  this
+  profile](https://superuser.com/questions/377186/how-do-i-start-chrome-using-a-specified-user-profile)
+  and log into everything you need your agent to have access to, and it will
+  persist over time.
+</Warning>
+
+### Method B: Connect Using Existing Playwright Objects
+
+Pass existing Playwright `Page`, `BrowserContext`, `Browser`, and/or `playwright` API object to `BrowserSession(...)`:
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+
+const playwright = await import("playwright");
+
+const browser = await playwright.chromium.launch();
+const context = await browser.newContext();
+const page = await context.newPage();
+
+const browserSession = new BrowserSession(
+        page: page,
+        // browserContext=context,  // all these are supported
+        // browser=browser,
+);
+
+const agent = new Agent(
+    task: "Your task here",
+    llm: llm,
+    browserSession: browserSession,
+);
+```
+
+You can also pass `page` directly to `Agent(...)` as a shortcut.
+
+```js
+const agent = new Agent(
+    task: "Your task here",
+    llm: llm,
+    page: page,
+)
+```
+
+### Method C: Connect to Local Browser Using Browser PID
+
+Connect to a browser with open `--remote-debugging-port`:
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+
+// First, start Chrome with remote debugging:
+// /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --remote-debugging-port=9242
+
+// Then connect using the process ID
+const browserSession = new BrowserSession(browserPid=12345)  // Replace with actual Chrome PID
+
+const agent = new Agent(
+    task: "Your task here",
+    llm: llm,
+    browserSession: browserSession,
+)
+```
+
+### Method D: Connect to remote Playwright Node.js Browser Server via WSS URL
+
+Connect to Playwright Node.js server providers:
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+
+# Connect to a playwright server
+const browserSession = new BrowserSession(wssUrl="wss://your-playwright-server.com/ws")
+
+const agent = new Agent(
+    task="Your task here",
+    llm=llm,
+    browserSession: browserSession,
+)
+```
+
+### Method E: Connect to Remote Browser via CDP URL
+
+Connect to any remote Chromium-based browser:
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+
+// Connect to Chrome via CDP
+const browserSession = new BrowserSession(cdpUrl="http://localhost:9222")
+
+const agent = new Agent(
+    task: "Your task here",
+    llm: llm,
+    browserSession: browserSession,
+)
+```
+
+## Security Considerations
+
+<Warning>
+  When using any browser profile, the agent will have access to:
+  - All its logged-in sessions and cookies
+  - Saved passwords (if autofill is enabled)
+  - Browser history and bookmarks
+  - Extensions and their data
+
+  Always review the task you're giving to the agent and ensure it aligns with your security requirements!
+  Use `Agent(sensitiveData={'https://auth.example.com': {x_key: value}})` for any secrets, and restrict the browser with `BrowserSession(allowedDomains=['https://*.example.com'])`.
+</Warning>
+
+## Best Practices
+
+1. **Use isolated profiles**: Create separate Chrome profiles for different agents to limit scope of risk:
+
+   ```js
+   const browserSession = new BrowserSession(
+       userDataDir='~/.config/browsernode/profiles/banking',
+       // profileDirectory='Default'
+   )
+   ```
+
+2. **Limit domain access**: Restrict which sites the agent can visit:
+
+   ```js
+   const browserSession = new BrowserSession(
+       allowedDomains: ['example.com', 'http*://*.github.com'],
+   )
+   ```
+
+3. **Enable `keepAlive=true`** If you want to use a single `BrowserSession` with more than one agent:
+   ```js
+   const browserSession = new BrowserSession(
+       keepAlive: true,
+       ...
+   )
+   await browserSession.start()  // start the session yourself before passing to Agent
+   ...
+   const agent = new Agent(..., browserSession: browserSession)
+   await agent.run()
+   ...
+   await browserSession.kill()   // end the session yourself, shortcut for keepAlive=false + .stop()
+   ```
+
+## Re-Using a Browser
+
+A `BrowserSession` starts when the browser is launched/connected, and ends when the browser process exits/disconnects. A session internally manages a single live playwright browser context, and is normally auto-closed by the agent when its task is complete (_if_ the agent started the session itself). If you pass an existing `BrowserSession` into an Agent, or if you set `BrowserSession(keepAlive=True)`, the session will not be closed and can be re-used between agents.
+
+Browsernode provides a number of ways to re-use profiles, sessions, and other configuration across multiple agents.
+
+- ✅ sequential agents can re-use a single `userDataDir` in new `BrowserSession`s
+- ✅ sequential agents can re-use a single `BrowserSession` without closing it
+- ❌ parallel agents cannot run separate `BrowserSession`s using the same `userDataDir`
+- ✅ parallel agents can run separate `BrowserSession`s using the same `storageState`
+- ✅ parallel agents can share a single `BrowserSession`, working in different tabs
+- ⚠️ parallel agents can share a single `BrowserSession`, working in the same tab
+
+<Important>
+  Multiple `BrowserSession`s (aka chrome processes) cannot share the same
+  `userDataDir` at the same time, but they can share a `storageState` file or
+  `BrowserProfile` config.
+</Important>
+
+### Sequential Agents, Same Profile, Different Browser
+
+If you are only running one agent & browser at a time, they can re-use the same `userDataDir` sequentially.
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+
+const reusedProfile = new BrowserProfile(userDataDir='~/.config/browsernode/profiles/default')
+
+const agent1 = new Agent(
+    task: "The first task...",
+    llm: llm,
+    browserProfile: reusedProfile,    // pass the profile in, it will auto-create a session
+)
+await agent1.run();
+
+const agent2 = new Agent(
+    task: "The second task...",
+    llm: llm,
+    browserProfile: reusedProfile,    // agent will auto-create its own new session
+)
+await agent2.run();
+```
+
+> Make sure to never mix different browser versions or `executablePath`s with the same `userDataDir`. Once run with a newer browser version, some migrations are applied to the dir and older browsers wont be able to read it.
+
+### Sequential Agents, Same Profile, Same Browser
+
+If you are only running one agent at a time, they can re-use the same active `BrowserSession` and avoid having to relaunch chrome.
+Each agent will start off looking at the same tab the last agent ended off on.
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+
+const reusedSession = new BrowserSession(
+    userDataDir='~/.config/browsernode/profiles/default',
+    keepAlive: true,  // dont close browser after 1st agent.run() ends
+)
+await reusedSession.start()   // when keepAlive=true, session must be started manually
+
+const agent1 = new Agent(
+    task: "The first task...",
+    llm: llm,
+    browserSession: reusedSession,
+)
+await agent1.run();
+
+const agent2 = new Agent(
+    task: "The second task...",
+    llm: llm,
+    browserSession: reusedSession,      // re-use the same session
+)
+await agent2.run();
+
+await reusedSession.close();
+```
+
+### Parallel Agents, Same Browser, Multiple Tabs
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+import { chromium } from "playwright";
+
+
+const browser = await chromium.launch();
+const context = await browser.newContext();
+const page1 = await context.newPage();
+const page2 = await context.newPage();
+
+const agent1 = new Agent(
+    task: "The first task...",
+    llm: llm,
+    page: page1,
+    )
+const agent2 = new Agent(
+    task: "The second task...",
+    llm: llm,
+    page: page2,
+)
+await Promise.all([agent1.run(), agent2.run()]); // run in parallel
+```
+
+### Parallel Agents, Same Browser, Same Tab
+
+<Warning>
+  ⚠️ This mode is not recommended. Agents are not yet optimized to share the
+  same tab in the same browser, they may interfere with each other or cause
+  errors.
+</Warning>
+
+```js
+import { Agent, BrowserSession } from "browsernode";
+import { chromium } from "playwright";
+
+const playwright = await import("playwright");
+
+const browser = await playwright.chromium.launch();
+const context = await browser.newContext();
+const sharedPage = await context.newPage();
+await sharedPage.goto('https://example.com', waitUntil='domcontentloaded')
+
+const sharedSession = new BrowserSession(page: sharedPage, keepAlive: true)
+await sharedSession.start()
+
+const agent1 = new Agent(
+    task: "Fill out the form in section A...",
+    llm: llm,
+    browserSession: sharedSession,
+)
+const agent2 = new Agent(
+    task: "Fill out the form in section B...",
+    llm: llm,
+    browserSession: sharedSession,
+)
+await Promise.all([agent1.run(), agent2.run()]); // run in parallel
+
+await sharedSession.kill();
+```
+
+### Parallel Agents, Same Profile, Different Browsers
+
+<Tip>This mode is the recommended default.</Tip>
+
+To share a single set of configuration or cookies, but still have agents working in their own browser sessions (potentially in parallel), use our provided `BrowserProfile` object.
+
+The recommended way to re-use cookies and localStorage state between separate parallel sessions is to use the [`storageState`](https://docs.browsernode.com/customize/browser-settings#storage-state) option.
+
+```bash
+# open a browser to log into sites you want the Agent to have access to
+playwright open https://example.com/ --save-storage=/tmp/auth.json
+playwright open https://example.com/ --load-storage=/tmp/auth.json
+```
+
+```js
+import { Agent, BrowserProfile, BrowserSession } from "browsernode";
+
+const sharedProfile = new BrowserProfile(
+    headless: true,
+    userDataDir: None,               // use dedicated tmp userDataDir per session
+    storageState: '/tmp/auth.json',   // load/save cookies to/from json file
+    keepAlive: true,                  // don't close the browser after the agent finishes
+)
+
+const window1 = new BrowserSession(browserProfile: sharedProfile)
+await window1.start()
+const agent1 = new Agent(browserSession: window1)
+
+const window2 = new BrowserSession(browserProfile: sharedProfile)
+await window2.start()
+const agent2 = new Agent(browserSession: window2)
+
+await Promise.all([agent1.run(), agent2.run()]);  // run in parallel
+await window1.saveStorageState();  // write storage state (cookies, localStorage, etc.) to auth.json
+await window2.saveStorageState();  // you must decide when to save manually
+
+// can also reload the cookies from the file into the active session if they change
+await window1.loadStorageState()
+await window1.close()
+await window2.close()
+```
+
+---
+
+## Troubleshooting
+
+### Chrome Won't Connect
+
+If you're having trouble connecting:
+
+1. **Close all Chrome instances** before trying to launch with a custom profile
+2. **Check if Chrome is running with debugging port**:
+   ```bash
+   ps aux | grep chrome | grep remote-debugging-port
+   ```
+3. **Verify the executable path** is correct for your system
+4. **Check profile permissions** - ensure your user has read/write access
+
+### Profile Lock Issues
+
+If you get a "profile is already in use" error:
+
+1. Close all Chrome instances
+2. The profile will automatically be unlocked when BrowserSession starts
+3. Alternatively, manually delete the `SingletonLock` file in the profile directory
 
 <Note>
-  When using your real browser, the agent will have access to all your logged-in sessions. Make sure to ALWAYS review the task you're giving to the agent and ensure it aligns with your security requirements!
+  For more configuration options, see the [Browser
+  Settings](/customize/browser-settings) documentation.
 </Note>
+
+### Profile Version Issues
+
+The browser version you run must always be equal to or greater than the version used to create the `userDataDir`.
+If you see errors like `Failed to parse Extensions` when launching, you're likely attempting to run an older browser with an incompatible `userDataDir` that's already been migrated to a newer Chrome version.
+
+Playwright ships a version of chromium that's newer than the default stable Google Chrome release channel, so this can happen if you try to use
+a profile created by the default playwright chromium (e.g. `userDataDir='~/.config/browsernode/profiles/default'`) with an older
+local browser like `executablePath='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'`.

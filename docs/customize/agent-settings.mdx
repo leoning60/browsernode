@@ -11,13 +11,13 @@ The `Agent` class is the core component of Browsernode that handles browser auto
 ## Basic Settings
 
 ```js
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI } from "browsernode/llm";
 import { Agent } from "browsernode";
 
 // Initialize the model
 const llm = new ChatOpenAI({
-	modelName: "gpt-4o",
-	openAIApiKey: process.env.OPENAI_API_KEY,
+	model: "gpt-4o",
+	apiKey: process.env.OPENAI_API_KEY,
 });
 // Create agent with the model
 const task = "Your task here";
@@ -35,43 +35,21 @@ agent.run();
 Control how the agent operates:
 
 ```js
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI } from "browsernode/llm";
 import { Agent, Controller } from "browsernode";
-import * as fs from "fs";
-import { z } from "zod";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 
-function getCurrentDirPath() {
-	const __filename = fileURLToPath(import.meta.url);
-	return dirname(__filename);
-}
-
-// Initialize controller first
 const customController = new Controller();
 
-// Use zod to define the action schema
-const SaveTextFileAction = z.object({
-	content: z.string(),
-});
-// Generate output directory once at startup
-customController.action("Save content to text file", {
-	paramModel: SaveTextFileAction,
-})(async function saveTextFile(params: z.infer<typeof SaveTextFileAction>) {
-	const content = params.content;
-	fs.appendFileSync(
-		join(getCurrentDirPath(), "hacker_news.txt"),
-		typeof content === "string" ? content : JSON.stringify(content),
-	);
-	return `Saved news to hacker_news.txt`;
+const llmClient = new ChatOpenAI({
+	model: "gpt-4o",
+	apiKey: process.env.OPENAI_API_KEY,
 });
 
-const agent = new Agent(task, model, {
+const agent = new Agent("your task", llmClient, {
 	controller: customController,
 	useVision: true,
 	saveConversationPath: "logs/conversation",
 });
-agent.run();
 ```
 ### Behavior Parameters
 
@@ -82,6 +60,8 @@ agent.run();
   - For GPT-4o, image processing costs approximately 800-1000 tokens (~$0.002 USD) per image (but this depends on the defined screen size)
 - `saveConversationPath`: Path to save the complete conversation history. Useful for debugging.
 - `systemPromptClass`: Custom system prompt class. See <a href="/customize/system-prompt">System Prompt</a> for customization options.
+- `overrideSystemMessage`: Completely replace the default system prompt with a custom one.
+- `extendSystemMessage`: Add additional instructions to the default system prompt.
 
 <Note>
   Vision capabilities are recommended for better web interaction understanding,
@@ -89,129 +69,63 @@ agent.run();
   support.
 </Note>
 
-## (Reuse) Browser Configuration
-
-You can configure how the agent interacts with the browser. To see more `Browser` options refer to the <a href="/customize/browser-settings">Browser Settings</a> documentation.
-
-### Reuse Existing Browser
-
-`browser`: A Browsernode Browser instance. When provided, the agent will reuse this browser instance and automatically create new contexts for each `run()`.
-
-```js
-import { ChatOpenAI } from "@langchain/openai";
-import { Agent, Browser, BrowserConfig } from "browsernode";
-
-const llm = new ChatOpenAI({
-	modelName: "gpt-4o",
-	temperature: 0.0,
-	streaming: true,
-	openAIApiKey: process.env.OPENAI_API_KEY,
-});
-
-const task = "Search for the latest nvidia stock price";
-// const task =" Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.";
-
-// Create browser configuration
-const config = new BrowserConfig({
-	headless: false, // Make sure the browser is visible
-	browserClass: "chromium", // Use Chrome/Chromium
-	browserInstancePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // Path to Chrome on macOS
-	extraBrowserArgs: [
-		"--start-maximized",
-		"--user-data-dir=/tmp/chrome-browsernode", // Use a separate user data directory
-		"--download-path=/tmp/chrome-browsernode/Downloads",
-	], // Optional: start with maximized window
-	forceKeepBrowserAlive: true, // Add this option to prevent closing browser when using existing instance
-});
-
-const agent = new Agent(task, llm, {
-	browser: new Browser(config),
-});
-// Run the agent task and handle process termination
-await agent.run();
-```
-
-<Note>
-  Remember: in this scenario the `Browser` will not be closed automatically.
-</Note>
-
 ### Reuse Existing Browser Context
 
-`browserContext`: A Playwright browser context. Useful for maintaining persistent sessions. See <a href="/customize/persistent-browser">Persistent Browser</a> for more details.
+By default browsernode launches its own builtin browser using playwright chromium.
+You can also connect to a remote browser or pass any of the following
+existing playwright objects to the Agent: `page`, `browserContext`, `browser`, `browserSession`, or `browserProfile`.
 
+These all get passed down to create a `BrowserSession` for the `Agent`:
+	
 ```js
-import { ChatOpenAI } from "@langchain/openai";
-import {
-	Agent,
-	AgentHistoryList,
-	Browser,
-	BrowserConfig,
-	BrowserContextConfig,
-} from "browsernode";
-
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) {
-	throw new Error("OPENAI_API_KEY is not set");
-}
-
-async function runAgent(task: string, max_steps: number = 38) {
-	const browser = new Browser(
-		new BrowserConfig({
-			headless: false,
-			disableSecurity: true,
-			extraBrowserArgs: ["--window-size=2000,2000"],
-		}),
-	);
-	const context = await browser.newContext(
-		new BrowserContextConfig({
-			tracePath: "./tmp/result_processing/",
-			noViewport: false,
-			browserWindowSize: { width: 1280, height: 1000 },
-		}),
-	);
-	const llm = new ChatOpenAI({
-		modelName: "gpt-4o",
-		temperature: 0.0,
-		openAIApiKey: apiKey,
-	});
-	try {
-		const agent = new Agent(task, llm, { browserContext: context });
-		const history: AgentHistoryList = await agent.run(max_steps);
-		console.log("Final Result:");
-		console.log(JSON.stringify(history.finalResult(), null, 4));
-
-		console.log("\nErrors:");
-		console.log(JSON.stringify(history.errors(), null, 4));
-
-		// e.g. xPaths the model clicked on
-		console.log("\nModel Outputs:");
-		console.log(JSON.stringify(history.modelActions(), null, 4));
-
-		console.log("\nThoughts:");
-		console.log(JSON.stringify(history.modelThoughts(), null, 4));
-	} finally {
-		await context.close();
-		await browser.close();
-	}
-}
-
-async function main() {
-	const task =
-		"Go to https://search.brave.com and search for tesla stock price";
-	const result = await runAgent(task);
-}
-
-main();
-
-
+agent = Agent(
+    task='book a flight to fiji',
+    llm=llm,
+    browserProfile=browserProfile,  # use this profile to create a BrowserSession
+    browserSession= new BrowserSession(   # use an existing BrowserSession
+      cdpUrl=...,                      # remote CDP browser to connect to
+      # or
+      wssUrl=...,                      # remote wss playwright server provider
+      # or
+      browserPid=...                   # pid of a locally running browser process to attach to
+      # or
+      executablePath=...               # provide a custom chrome binary path
+      # or
+      channel=...                       # specify chrome, chromium, ms-edge, etc.
+      # or
+      page=page,                        # use an existing playwright Page object
+      # or
+      browserContext=browserContext,  # use an existing playwright BrowserContext object
+      # or
+      browser=browser,                  # use an existing playwright Browser object
+    ),
+)
 ```
 
-For more information about how browser context works, refer to the [Playwright
-documentation](https://playwright.dev/docs/api/class-browsercontext).
+For example, to connect to an existing browser over CDP you could do:
+
+```js
+agent = Agent(
+    ...
+    browserSession=new BrowserSession(cdpUrl='http://localhost:9222'),
+)
+```
+
+For example, to connect to a local running chrome instance you can do:
+
+```js
+agent = Agent(
+    ...
+    browserSession=new BrowserSession(browserPid=1234),
+)
+```
+
+See <a href="/customize/real-browser">Connect to your Browser</a> for more info.
 
 <Note>
-  You can reuse the same context for multiple agents. If you do nothing, the
-  browser will be automatically created and closed on `run()` completion.
+  You can reuse the same `BrowserSession` after an agent has completed running.
+  If you do nothing, the browser will be automatically closed on `run()`
+  completion only if it was launched by us.
 </Note>
 
 ## Running the Agent
@@ -257,7 +171,7 @@ With [this example](../../examples/features/initial_actions.ts) you can run init
 Specify the action as a dictionary where the key is the action name and the value is the action parameters. You can find all our actions in the [Controller](../../src/controller/service.ts) source code.
 
 ```js
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI } from "browsernode/llm";
 import { Agent } from "browsernode";
 
 const initialActions = [
@@ -271,10 +185,9 @@ const initialActions = [
 ];
 
 const llm = new ChatOpenAI({
-	modelName: "gpt-4o-mini",
+	model: "gpt-4o",
 	temperature: 0.0,
-	streaming: true,
-	openAIApiKey: process.env.OPENAI_API_KEY,
+	apiKey: process.env.OPENAI_API_KEY,
 });
 
 const task = "What theories are displayed on the page?";
@@ -289,7 +202,7 @@ agent.run();
 You can configure the agent and provide a separate message to help the LLM understand the task better.
 
 ```js
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI } from "browsernode/llm";
 import { Agent } from "browsernode";
 
 const llm = new ChatOpenAI({
@@ -307,23 +220,23 @@ agent.run();
 You can configure the agent to use a separate planner model for high-level task planning:
 
 ```js
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI } from "browsernode/llm";
 import { Agent } from "browsernode";
 
 const llm = new ChatOpenAI({
-	modelName: "gpt-4o",
+	model: "gpt-4o",
 	temperature: 0.0,
-	openAIApiKey: process.env.OPENAI_API_KEY,
+	apiKey: process.env.OPENAI_API_KEY,
 });
 
-const planner_llm = new ChatOpenAI({
+const plannerLLM = new ChatOpenAI({
 	modelName: "o3-mini",
 	openAIApiKey: process.env.OPENAI_API_KEY,
 });
 
 const task = "your task here";
 const agent = new Agent(task, llm, {
-	plannerLLM: planner_llm,
+	plannerLLM: plannerLLM,
 	useVisionForPlanner: false,
 	plannerInterval: 4,
 });
@@ -354,3 +267,19 @@ Using a separate planner model can help:
 - `maxFailures`: Maximum number of failures before giving up. Defaults to `3`.
 - `retryDelay`: Time to wait between retries in seconds when rate limited. Defaults to `10`.
 - `generateGif`: Enable/disable GIF generation. Defaults to `False`. Set to `True` or a string path to save the GIF.
+
+## Memory
+
+Memory management in browsernode has been significantly improved. The agent's context handling and state management are now robust enough that the previous memory system (`mem0`) is no longer needed or supported.
+
+The agent maintains its context and task progress through:
+
+- Detailed history tracking of actions and results
+- Structured state management
+- Clear goal setting and evaluation at each step
+
+The `enableMemory` parameter has been removed as the new system provides better context management by default.
+
+<Note>
+  If you're upgrading from an older version that used `enableMemory`, simply remove this parameter. The agent will automatically use the improved context management system.
+</Note>

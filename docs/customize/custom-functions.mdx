@@ -83,7 +83,7 @@ customController.action("Open website", {
 	paramModel: OpenWebsiteAction,
 })(async function openWebsite(params: z.infer<typeof OpenWebsiteAction>) {
 	const url = params.url;
-    const page = browser.get_current_page();
+    const page = browser.getCurrentPage();
     await page.goto(url);
     return new ActionResult({
         extractedContent: 'Website opened'
@@ -92,9 +92,9 @@ customController.action("Open website", {
 
 ```
 
-## Structured Parameters with Pydantic
+## Structured Parameters with Zod
 
-For complex actions, you can define parameter schemas using Pydantic models:
+For complex actions, you can define parameter schemas using Zod:
 
 ```js
 import { Controller, ActionResult, Browser } from "browsernode";
@@ -109,7 +109,7 @@ const JobDetailsAction = z.object({
 });
 customController.action('Save job details which you found on page', {
     jobDetails: JobDetailsAction
-})(async function save_job(params: { jobDetails: z.infer<typeof JobDetailsAction> }, browser: Browser) {
+})(async function saveJob(params: { jobDetails: z.infer<typeof JobDetailsAction> }, browser: Browser) {
     console.log(`Saving job: ${params.jobDetails.title} at ${params.jobDetails.company}`);
     // Access browser if needed
     const page = browser.getCurrentPage();
@@ -153,8 +153,10 @@ await agent2.run()
 
 ## Exclude functions
 If you want less actions to be used by the agent, you can exclude them from the controller.
-```python
-controller = Controller(exclude_actions=['open_tab', 'search_google'])
+```js
+const customController = new Controller({
+	excludeActions: ["openTab", "searchGoogle"],
+});
 ```
 
 
