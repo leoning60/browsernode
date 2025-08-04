@@ -1,9 +1,12 @@
 # Source files
 src/
 examples/
+old_examples/
 eval/
+old_eval/
 docs/
 static/
+debug/
 
 # Development files
 .github/
@@ -18,6 +21,8 @@ tsconfig.build.json
 biome.json
 lefthook.yml
 .gitignore
+.vscode/
+.cursor/
 
 # Dependencies
 package-lock.json
@@ -25,6 +30,20 @@ node_modules/
 
 # Build artifacts that shouldn't be published
 *.tsbuildinfo
+
+# Runtime generated files
+logs/
+recordings/
+tmp.*
+*.log
+.backup
+downloads/
+
+# Environment and sensitive files
+.env
+.env.*
+*.env
+
 
 # Keep these files for publishing:
 # dist/
