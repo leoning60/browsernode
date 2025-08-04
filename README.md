@@ -23,6 +23,11 @@ with [npm](https://www.npmjs.com/) (v10.9.0 or higher)
 npm install browsernode
 ```
 Install Playwright:
+[Installation | Playwright](https://playwright.dev/docs/intro)
+```bash
+npm init playwright@latest
+```
+
 ```bash
 playwright install chromium
 ```
@@ -30,17 +35,20 @@ playwright install chromium
 Spin up your agent:
 
 ```javascript
-import { ChatOpenAI } from "@langchain/openai";
 import { Agent } from "browsernode";
+import { ChatOpenAI } from "browsernode/llm";
 
 const llm = new ChatOpenAI({
-	modelName: "gpt-4o",
-	streaming: true,
-	openAIApiKey: process.env.OPENAI_API_KEY,
+	model: "gpt-4.1",
+	temperature: 0.0,
+	apiKey: process.env.OPENAI_API_KEY,
 });
 
 const task = "Search for the latest tesla stock price";
-const agent = new Agent(task, llm);
+const agent = new Agent({
+	task: task,
+	llm: llm,
+});
 agent.run();
 ```
 
@@ -53,6 +61,11 @@ mv .env.example .env
 OPENAI_API_KEY=
 ```
 For other settings, models, and more, check out the [documentation 📕](https://docs.browsernode.com).
+
+## Test with UI
+You can test browsernode using [gadio_demo](./examples/ui/gradio_demo.ts)
+## Test with an interactive CLI
+You can also use our browsernode-cli
 
 # Demos
 
@@ -111,5 +124,3 @@ Tell your computer what to do, and it gets it done.
 ## Contributing
 
 We love contributions! Feel free to open issues for bugs or feature requests. To contribute to the docs, check out the `/docs` folder.
-
-## Local Setup
