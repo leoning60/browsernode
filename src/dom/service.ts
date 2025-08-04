@@ -8,7 +8,7 @@ import type { SelectorMap } from "./views";
 
 import { fileURLToPath } from "url";
 import bnLogger from "../logging_config";
-import { timeExecution } from "../utils_old";
+import { timeExecution } from "../utils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

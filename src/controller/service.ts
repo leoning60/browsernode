@@ -34,7 +34,7 @@ import { ActionResult } from "../agent/views";
 import type { FileSystem } from "../filesystem/file_system";
 import { createUserMessage } from "../llm/messages";
 import bnLogger from "../logging_config";
-import { timeExecution } from "../utils_old";
+import { timeExecution } from "../utils";
 import type { ActionModel } from "./registry/views";
 
 // Setup logger

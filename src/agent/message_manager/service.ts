@@ -17,7 +17,7 @@ import type { BrowserStateSummary } from "../../browser/views";
 import type { FileSystem } from "../../filesystem/file_system";
 import bnLogger from "../../logging_config";
 import { matchUrlWithDomainPattern } from "../../utils";
-import { timeExecution } from "../../utils_old";
+import { timeExecution } from "../../utils";
 import { AgentMessagePrompt } from "../prompts";
 import type { ActionResult, AgentOutput, AgentStepInfo } from "../views";
 import { HistoryItem, MessageManagerState } from "./views";

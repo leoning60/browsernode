@@ -1948,7 +1948,7 @@ export class BrowserSession extends EventEmitter {
 
 			this.browserContext = await Promise.race([launchPromise, timeoutPromise]);
 		} catch (error: any) {
-			// Check if it's a SingletonLock error (equivalent to Python's SingletonLock handling)
+			// Check if it's a SingletonLock error
 			if (
 				error.message.includes("SingletonLock") ||
 				error.message.includes("ProcessSingleton")

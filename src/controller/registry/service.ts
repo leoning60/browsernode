@@ -5,7 +5,7 @@ import type { BaseChatModel } from "../../llm/base";
 import bnLogger from "../../logging_config";
 import { ProductTelemetry } from "../../telemetry/service";
 import { matchUrlWithDomainPattern } from "../../utils";
-import { timeExecution } from "../../utils_old";
+import { timeExecution } from "../../utils";
 import {
 	ActionModel,
 	ActionRegistry,

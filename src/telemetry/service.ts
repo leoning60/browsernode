@@ -7,7 +7,7 @@ import { Logger } from "winston";
 
 import { CONFIG } from "../config";
 import bnLogger from "../logging_config";
-import { singleton } from "../utils_old";
+import { singleton } from "../utils";
 import { BaseTelemetryEvent } from "./views";
 
 const logger: Logger = bnLogger.child({
