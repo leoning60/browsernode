@@ -970,7 +970,9 @@ class BrowsernodeApp extends EventEmitter {
 			if (!this.llm) {
 				throw new Error("LLM not initialized");
 			}
-			this.agent = new Agent(task, this.llm, {
+			this.agent = new Agent({
+				task,
+				llm: this.llm,
 				controller: this.controller || new Controller(),
 				browserSession: this.browserSession!,
 				source: "cli",
@@ -1407,7 +1409,9 @@ async function runPromptMode(
 		});
 
 		// Create and run agent
-		const agent = new Agent(prompt, llm, {
+		const agent = new Agent({
+			task: prompt,
+			llm,
 			browserSession,
 			source: "cli",
 			...(agentSettings as AgentSettings),

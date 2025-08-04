@@ -58,7 +58,7 @@ import { CloudSync } from "../sync";
 import { ProductTelemetry } from "../telemetry/service";
 import { AgentTelemetryEvent } from "../telemetry/views";
 import { SignalHandler, getBrowserNodeVersion, logPrettyPath } from "../utils";
-import { timeExecution } from "../utils_old";
+import { timeExecution } from "../utils";
 import { createHistoryGif } from "./gif";
 
 const logger = bnLogger.child({
@@ -197,76 +197,74 @@ export class Agent<
 	lastResponseTime: number = 0;
 
 	// Constructor with timeExecution decorator equivalent
-	constructor(
-		task: string,
-		llm: BaseChatModel,
-		options: {
-			// Browser options
-			page?: Page;
-			browser?: Browser | BrowserSession;
-			browserContext?: BrowserContext;
-			browserProfile?: BrowserProfile;
-			browserSession?: BrowserSession;
-			controller?: Controller<Context>;
+	constructor(options: {
+		// Required parameters
+		task: string;
+		llm: BaseChatModel;
 
-			// Initial agent run parameters
-			sensitiveData?: Record<string, string | Record<string, string>>;
-			initialActions?: Array<Record<string, Record<string, any>>>;
+		// Browser options
+		page?: Page;
+		browser?: Browser | BrowserSession;
+		browserContext?: BrowserContext;
+		browserProfile?: BrowserProfile;
+		browserSession?: BrowserSession;
+		controller?: Controller<Context>;
 
-			// Cloud callbacks
-			registerNewStepCallback?: (
-				state: BrowserStateSummary,
-				output: AgentOutput,
-				step: number,
-			) => void | Promise<void>;
-			registerDoneCallback?: (
-				history: AgentHistoryList,
-			) => void | Promise<void>;
-			registerExternalAgentStatusRaiseErrorCallback?: () => Promise<boolean>;
+		// Initial agent run parameters
+		sensitiveData?: Record<string, string | Record<string, string>>;
+		initialActions?: Array<Record<string, Record<string, any>>>;
 
-			// Agent settings
-			outputModelSchema?: new (
-				...args: any[]
-			) => TAgentStructuredOutput;
-			useVision?: boolean;
-			useVisionForPlanner?: boolean;
-			saveConversationPath?: string;
-			saveConversationPathEncoding?: string;
-			maxFailures?: number;
-			retryDelay?: number;
-			overrideSystemMessage?: string;
-			extendSystemMessage?: string;
-			validateOutput?: boolean;
-			messageContext?: string;
-			generateGif?: boolean | string;
-			availableFilePaths?: string[];
-			includeAttributes?: string[];
-			maxActionsPerStep?: number;
-			useThinking?: boolean;
-			maxHistoryItems?: number;
-			pageExtractionLLM?: BaseChatModel;
-			plannerLLM?: BaseChatModel;
-			plannerInterval?: number;
-			isPlannerReasoning?: boolean;
-			extendPlannerSystemMessage?: string;
-			injectedAgentState?: AgentState;
-			context?: Context;
-			source?: string;
-			fileSystemPath?: string;
-			taskId?: string;
-			cloudSync?: CloudSync;
-			calculateCost?: boolean;
-			displayFilesInDoneText?: boolean;
-		} = {},
-	) {
+		// Cloud callbacks
+		registerNewStepCallback?: (
+			state: BrowserStateSummary,
+			output: AgentOutput,
+			step: number,
+		) => void | Promise<void>;
+		registerDoneCallback?: (history: AgentHistoryList) => void | Promise<void>;
+		registerExternalAgentStatusRaiseErrorCallback?: () => Promise<boolean>;
+
+		// Agent settings
+		outputModelSchema?: new (
+			...args: any[]
+		) => TAgentStructuredOutput;
+		useVision?: boolean;
+		useVisionForPlanner?: boolean;
+		saveConversationPath?: string;
+		saveConversationPathEncoding?: string;
+		maxFailures?: number;
+		retryDelay?: number;
+		overrideSystemMessage?: string;
+		extendSystemMessage?: string;
+		validateOutput?: boolean;
+		messageContext?: string;
+		generateGif?: boolean | string;
+		availableFilePaths?: string[];
+		includeAttributes?: string[];
+		maxActionsPerStep?: number;
+		useThinking?: boolean;
+		maxHistoryItems?: number;
+		pageExtractionLLM?: BaseChatModel;
+		plannerLLM?: BaseChatModel;
+		plannerInterval?: number;
+		isPlannerReasoning?: boolean;
+		extendPlannerSystemMessage?: string;
+		injectedAgentState?: AgentState;
+		context?: Context;
+		source?: string;
+		fileSystemPath?: string;
+		taskId?: string;
+		cloudSync?: CloudSync;
+		calculateCost?: boolean;
+		displayFilesInDoneText?: boolean;
+	}) {
 		// Initialize IDs
 		this.id = options.taskId || uuidv4();
 		this.taskId = this.id;
 		this.sessionId = uuidv4();
 
 		// Core components
-		this.task = task;
-		this.llm = llm;
+		this.task = options.task;
+		this.llm = options.llm;
 		this.controller =
 			options.controller ||
 			new Controller<Context>(
@@ -303,7 +301,7 @@ export class Agent<
 			maxActionsPerStep: options.maxActionsPerStep ?? 10,
 			useThinking: options.useThinking ?? true,
 			maxHistoryItems: options.maxHistoryItems ?? 40,
-			pageExtractionLLM: options.pageExtractionLLM || llm,
+			pageExtractionLLM: options.pageExtractionLLM || options.llm,
 			plannerLLM: options.plannerLLM,
 			plannerInterval: options.plannerInterval ?? 1,
 			isPlannerReasoning: options.isPlannerReasoning ?? false,
@@ -313,7 +311,7 @@ export class Agent<
 
 		// Token cost service
 		this.tokenCostService = new TokenCost(this.settings.calculateCost);
-		this.tokenCostService.registerLLM(llm);
+		this.tokenCostService.registerLLM(options.llm);
 		if (this.settings.pageExtractionLLM) {
 			this.tokenCostService.registerLLM(this.settings.pageExtractionLLM);
 		}
@@ -351,7 +349,7 @@ export class Agent<
 		// Initialize message manager with state
 		// Initial system prompt with all actions - will be updated during each step
 		this._messageManager = new MessageManager({
-			task,
+			task: options.task,
 			systemMessage: new SystemPrompt({
 				actionDescription: this.unfilteredActions,
 				maxActionsPerStep: this.settings.maxActionsPerStep,

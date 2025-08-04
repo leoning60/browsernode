@@ -1,6 +1,6 @@
 import { Logger } from "winston";
 import bnLogger from "../logging_config";
-import { timeExecution } from "../utils_old";
+import { timeExecution } from "../utils";
 import { HistoryTreeProcessor } from "./history_tree_processor/service";
 import type {
 	CoordinateSet,
