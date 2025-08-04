@@ -60,6 +60,7 @@
 		"@biomejs/biome": "^1.9.4",
 		"@types/blessed": "^0.1.25",
 		"@types/node": "^22.13.13",
+		"@types/node-fetch": "^2.6.13",
 		"@types/yargs": "^17.0.33",
 		"typescript": "^5.8.2"
 	},
