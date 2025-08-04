@@ -1,6 +1,6 @@
 {
 	"name": "browsernode",
-	"version": "0.4.4",
+	"version": "0.4.5",
 	"description": "A powerful browser automation library with AI agent capabilities",
 	"keywords": [
 		"browser",
@@ -30,29 +30,35 @@
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
+			"import": "./dist/index.js",
+			"require": "./dist/index.js"
 		},
 		"./llm": {
 			"types": "./dist/llm/index.d.ts",
-			"import": "./dist/llm/index.js"
+			"import": "./dist/llm/index.js",
+			"require": "./dist/llm/index.js"
 		},
 		"./browser": {
 			"types": "./dist/browser/index.d.ts",
-			"import": "./dist/browser/index.js"
+			"import": "./dist/browser/index.js",
+			"require": "./dist/browser/index.js"
 		},
 		"./browser/types": {
 			"types": "./dist/browser/types.d.ts",
-			"import": "./dist/browser/types.js"
+			"import": "./dist/browser/types.js",
+			"require": "./dist/browser/types.js"
 		},
 		"./agent/views": {
 			"types": "./dist/agent/views.d.ts",
-			"import": "./dist/agent/views.js"
+			"import": "./dist/agent/views.js",
+			"require": "./dist/agent/views.js"
 		}
 	},
 	"files": ["dist", "bin", "README.md", "LICENSE"],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/dom_tree/index.js dist/dom/dom_tree/ && chmod +x cli/cli.js",
-		"prepublishOnly": "npm run build",
+		"build": "tsc -p tsconfig.build.json && cp src/agent/system_prompt.md dist/agent/ && cp src/dom/dom_tree/index.js dist/dom/dom_tree/ && chmod +x cli/cli.js && node scripts/fix-imports.js",
+		"prepublishOnly": "npm run test && npm run lint && npm run build && npm pack --dry-run",
+		"lint": "biome check .",
 		"test": "vitest",
 		"cli": "tsx src/tokens/cli.ts"
 	},

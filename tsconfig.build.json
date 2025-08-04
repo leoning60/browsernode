@@ -6,7 +6,7 @@
 		"declarationMap": true,
 		"sourceMap": true,
 		"noEmit": false,
-		"moduleResolution": "bundler",
+		"moduleResolution": "node",
 		"allowImportingTsExtensions": false,
 		"verbatimModuleSyntax": false,
 		"allowSyntheticDefaultImports": true,

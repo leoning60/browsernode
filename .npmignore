@@ -1,12 +1,14 @@
 # Source files
 src/
 examples/
-old_examples/
 eval/
-old_eval/
-docs/
-static/
+scripts/
 debug/
+docs/
+old_examples/
+old_eval/
+static/
+
 
 # Development files
 .github/
@@ -24,6 +26,10 @@ lefthook.yml
 .vscode/
 .cursor/
 
+# Git related files (npm automatically ignores .git/ folder)
+.gitattributes
+.gitmodules
+
 # Dependencies
 package-lock.json
 node_modules/
@@ -32,6 +38,7 @@ node_modules/
 *.tsbuildinfo
 
 # Runtime generated files
+.config/
 logs/
 recordings/
 tmp.*
