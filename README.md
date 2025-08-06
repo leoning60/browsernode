@@ -1,12 +1,9 @@
-<img class="light-mode" alt="Shows a black Browsernode Logo in light color mode" src="https://github.com/user-attachments/assets/9101f203-8fc7-4d64-b116-7ad3db0f6ff0" alt="Browsernode Logo">
-<img class="dark-mode" alt="Shows a white Browsernode Logo in dark color mode" src="https://github.com/user-attachments/assets/2a91581a-623c-40a7-94d0-04aa720e1ff9" alt="Browsernode Logo">
-<style>
-  .dark-mode { display: none; }
-  @media (prefers-color-scheme: dark) {
-    .light-mode { display: none; }
-    .dark-mode { display: block; }
-  }
-</style>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/2a91581a-623c-40a7-94d0-04aa720e1ff9">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/9101f203-8fc7-4d64-b116-7ad3db0f6ff0">
+  <img alt="Shows a black Browser Use Logo in light color mode and a white one in dark color mode." src="https://github.com/user-attachments/assets/9101f203-8fc7-4d64-b116-7ad3db0f6ff0"  width="full">
+</picture>
+
 
 <h1 align="center">Enable AI to control your browser 🤖</h1>
 <h3 align="center">Browsernode is TypeScript implementation of <a href="https://browser-use.com/">Browser-use</a> </h3>
@@ -17,7 +14,7 @@
 
 # Quick start
 
-with [npm](https://www.npmjs.com/) (v10.9.0 or higher)
+with [Node.js](https://nodejs.org/en/download) (v20.19.4 or higher) and npm
 
 ```bash
 npm install browsernode
@@ -63,7 +60,6 @@ const { ChatOpenAI } = require("browsernode/llm");
     llm,
   });
 
-  console.log("---simple.ts agent run---");
   const history = await agent.run();
   console.log(history.usage);
 })();
@@ -74,9 +70,9 @@ const { ChatOpenAI } = require("browsernode/llm");
 package.json
 ```json
 {
-  ...
-"type": "module"
-  ...
+  // ... other properties
+  "type": "module"
+  // ... other properties
 }
 ```
 
@@ -111,7 +107,7 @@ You can also use our browsernode-cli
 
 # Demos
 
-[Task](./examples/custom-functions/save_to_file_companies.ts):**look up the world's most valuable companies, save top 5 companies and their value to companies.txt.**
+[Task](./examples/custom-functions/save_to_file_top20_companies.ts):**look up the world's most valuable companies, save top 5 companies and their value to companies.txt.**
 
 ![AI Did Search And Save](https://github.com/user-attachments/assets/ac2e1fa6-f455-4f89-a710-877aebfcd590)
 
@@ -124,7 +120,7 @@ output: companies.txt
 5. Alphabet (Google): $2.125 T
 ```
 <br/><br/>
-[Task](./examples/use-cases/google_doc.ts):**Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.**
+[Task](./examples/custom-functions/google_doc.ts):**Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.**
 
 ![Write google doc And Save pdf](https://github.com/user-attachments/assets/615a8581-7a08-4a7a-85ad-2ac8cebdf74c)
 
@@ -135,22 +131,20 @@ output: companies.txt
 ![from banana to Quantum mechanics](https://github.com/user-attachments/assets/ae3ce541-a710-4941-a28a-6f26be704c9f)
 result:
 ```json
-...
-...
+// ... previous actions
 🛠️ Action 1/1: {
   "clickElement": {
     "index": 41
   }
 }
-...
-...
+// ... more actions
  🛠️ Action 1/1: {
 "done": {
     "success": false,
     "text": "I navigated through the Banana Wikipedia page, reaching the section on Fusarium wilt TR4. However, I did not complete the task of reaching Quantum mechanics."
   }
-...
-...
+}
+// ... final result
 📄 Result: I navigated through the Banana Wikipedia page, reaching the section on Fusarium wilt TR4. However, I did not complete the task of reaching Quantum mechanics.
 ```
 <br/><br/>
