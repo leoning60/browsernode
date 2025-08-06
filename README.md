@@ -155,9 +155,6 @@ result:
 
 For more examples see the [examples](examples) folder
 
-# Vision
-
-Tell your computer what to do, and it gets it done.
 
 ## Contributing
 
