@@ -40,8 +40,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright or Patchright browsers
-        run: npx playwright install chromium
+      - name: Install Playwright browsers
+        run: |
+          npx playwright install --with-deps chromium
+          npx patchright install chromium
 
       - name: Run tests
         run: npm test
