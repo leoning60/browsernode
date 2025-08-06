@@ -15,6 +15,7 @@
 # Quick start
 
 with [Node.js](https://nodejs.org/en/download) (v20.19.4 or higher) and npm
+Bun environment ❌, has a Playwright bug.
 
 ```bash
 npm install browsernode
@@ -68,7 +69,7 @@ const { ChatOpenAI } = require("browsernode/llm");
 
 ### ESM style
 package.json
-```json
+```javascript
 {
   // ... other properties
   "type": "module"
@@ -130,7 +131,7 @@ output: companies.txt
 
 ![from banana to Quantum mechanics](https://github.com/user-attachments/assets/ae3ce541-a710-4941-a28a-6f26be704c9f)
 result:
-```json
+```javascript
 // ... previous actions
 🛠️ Action 1/1: {
   "clickElement": {
