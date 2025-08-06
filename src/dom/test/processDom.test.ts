@@ -17,31 +17,38 @@ import {
 } from "vitest";
 
 describe("DOM Tree Processing", () => {
-	let browser: Browser;
+	let browser: Browser | undefined;
 	let context: BrowserContext;
 	let page: Page;
 
 	// Setup before tests
 	beforeAll(async () => {
 		browser = await chromium.launch({
-			headless: false,
+			headless: process.env.CI ? true : false, // Use headless mode in CI
 		});
 	});
 
 	// Cleanup after tests
 	afterAll(async () => {
-		await browser.close();
+		if (browser) {
+			await browser.close();
+		}
 	});
 
 	// Setup before each test
 	beforeEach(async () => {
+		if (!browser) {
+			throw new Error("Browser not initialized");
+		}
 		context = await browser.newContext();
 		page = await context.newPage();
 	});
 
 	// Cleanup after each test
 	afterEach(async () => {
-		await context.close();
+		if (context) {
+			await context.close();
+		}
 	});
 
 	test("should process DOM tree from xxx.com", { timeout: 20000 }, async () => {
