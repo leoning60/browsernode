@@ -15,7 +15,8 @@
 # Quick start
 
 with [Node.js](https://nodejs.org/en/download) (v20.19.4 or higher) and npm
-Bun environment ❌, has a Playwright bug.
+
+❌ Bun environment , has a Playwright bug.
 
 ```bash
 npm install browsernode
