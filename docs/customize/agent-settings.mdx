@@ -81,23 +81,23 @@ These all get passed down to create a `BrowserSession` for the `Agent`:
 agent = Agent(
     task='book a flight to fiji',
     llm=llm,
-    browserProfile=browserProfile,  # use this profile to create a BrowserSession
-    browserSession= new BrowserSession(   # use an existing BrowserSession
-      cdpUrl=...,                      # remote CDP browser to connect to
-      # or
-      wssUrl=...,                      # remote wss playwright server provider
-      # or
-      browserPid=...                   # pid of a locally running browser process to attach to
-      # or
-      executablePath=...               # provide a custom chrome binary path
-      # or
-      channel=...                       # specify chrome, chromium, ms-edge, etc.
-      # or
-      page=page,                        # use an existing playwright Page object
-      # or
-      browserContext=browserContext,  # use an existing playwright BrowserContext object
-      # or
-      browser=browser,                  # use an existing playwright Browser object
+    browserProfile=browserProfile,  // use this profile to create a BrowserSession
+    browserSession= new BrowserSession(   // use an existing BrowserSession
+      cdpUrl=...,                      // remote CDP browser to connect to
+      // or
+      wssUrl=...,                      // remote wss playwright server provider
+      // or
+      browserPid=...                   // pid of a locally running browser process to attach to
+      // or
+      executablePath=...               // provide a custom chrome binary path
+      // or
+      channel=...                       // specify chrome, chromium, ms-edge, etc.
+      // or
+      page=page,                        // use an existing playwright Page object
+      // or
+      browserContext=browserContext,  // use an existing playwright BrowserContext object
+      // or
+      browser=browser,                  // use an existing playwright Browser object
     ),
 )
 ```
@@ -106,7 +106,7 @@ For example, to connect to an existing browser over CDP you could do:
 
 ```js
 agent = Agent(
-    ...
+    //...
     browserSession=new BrowserSession(cdpUrl='http://localhost:9222'),
 )
 ```
@@ -115,7 +115,7 @@ For example, to connect to a local running chrome instance you can do:
 
 ```js
 agent = Agent(
-    ...
+    //...
     browserSession=new BrowserSession(browserPid=1234),
 )
 ```
@@ -162,13 +162,12 @@ The `AgentHistoryList` provides many helper methods to analyze the execution:
 
 <Note>
   For a complete list of helper methods and detailed history analysis
-  capabilities, refer to the [AgentHistoryList source
-  code](../../src/agent/views.ts).
+  capabilities, refer to the [AgentHistoryList source code](https://github.com/leoning60/browsernode/blob/main/src/agent/views.ts).
 </Note>
 
 ## Run initial actions without LLM
-With [this example](../../examples/features/initial_actions.ts) you can run initial actions without the LLM.
-Specify the action as a dictionary where the key is the action name and the value is the action parameters. You can find all our actions in the [Controller](../../src/controller/service.ts) source code.
+With [this example](https://github.com/leoning60/browsernode/blob/main/examples/features/initial_actions.ts) you can run initial actions without the LLM.
+Specify the action as a dictionary where the key is the action name and the value is the action parameters. You can find all our actions in the [Controller](https://github.com/leoning60/browsernode/blob/main/src/controller/service.ts) source code.
 
 ```js
 import { ChatOpenAI } from "browsernode/llm";
@@ -211,7 +210,11 @@ const llm = new ChatOpenAI({
 	streaming: true,
 	openAIApiKey: process.env.OPENAI_API_KEY,
 });
-const agent = new Agent(task, llm, { messageContext: "Additional information about the task" });
+const agent = new Agent({
+  task: task,
+  llm: llm,
+  messageContext: "Additional information about the task"
+});
 agent.run();
 ```
 
@@ -235,7 +238,9 @@ const plannerLLM = new ChatOpenAI({
 });
 
 const task = "your task here";
-const agent = new Agent(task, llm, {
+const agent = new Agent({
+  task: task,
+  llm: llm,
 	plannerLLM: plannerLLM,
 	useVisionForPlanner: false,
 	plannerInterval: 4,

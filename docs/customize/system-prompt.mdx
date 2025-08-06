@@ -50,9 +50,9 @@ You are an AI agent that helps users with web browsing tasks.
 
 // Create agent with custom system prompt
 const agent = new Agent(
-    "Your task here",
-    llm,
     {
+        task: "Your task here",
+        llm: llm,
         overrideSystemMessage: overrideSystemMessage,
     }
 );
@@ -70,13 +70,13 @@ Always suggest exploring multiple options before making a decision.
 
 // Create agent with extended planner system prompt
 const llm = new ChatOpenAI(model: "gpt-4o");
-const plannerLlm = new ChatOpenAI(model: "gpt-4o-mini");
+const plannerLLM = new ChatOpenAI(model: "gpt-4o-mini");
 
 const agent = new Agent(
-    "Your task here",
-    llm,
     {
-        plannerLlm: plannerLlm,
+        task: "Your task here",
+        llm: llm,
+        plannerLLM: plannerLLM,
         extendPlannerSystemMessage: extendPlannerSystemMessage,
     }
 );

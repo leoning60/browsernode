@@ -40,7 +40,9 @@ customController.action("Save content to text file", {
 	return `Saved news to hacker_news.txt`;
 });
 
-const agent = new Agent(task, model, {
+const agent = new Agent({
+	task: task,
+	model: model,
 	controller: customController,
 });
 agent.run();
@@ -54,7 +56,9 @@ agent.run();
 
 ```js
 //... then pass controller to the agent
-const agent = new Agent(task, model, {
+const agent = new Agent(
+	task: task,
+	model: model,
 	controller: customController,
 });
 ```
@@ -127,18 +131,22 @@ const customController = new Controller();
 // ... register actions to the controller
 
 const agent = new Agent(
+  {
     task: "Go to website X and find the latest news",
     llm: llm,
-    {controller:customController}
+    controller:customController
+  }
 );
 
 // Run the agent
 await agent.run();
 
 const agent2 = new Agent(
+  {
     task: "Go to website Y and find the latest news",
     llm: llm,
-    {controller:customController}
+    controller:customController
+  }
 });
 
 await agent2.run()

@@ -30,30 +30,29 @@ Launch a local browser using built-in default (playwright `chromium`) or a provi
 import { Agent, BrowserSession } from "browsernode";
 
 // If no executablePath provided, uses Playwright/Patchright's built-in Chromium
-const browserSession = new BrowserSession(
+const browserSession = new BrowserSession({
     // Path to a specific Chromium-based executable (optional)
-    executablePath='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',  // macOS
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',  // macOS
     // For Windows: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
     // For Linux: '/usr/bin/google-chrome'
 
-    // Use a specific data directory on disk (optional, set to None for incognito)
-    userDataDir='~/.config/browsernode/profiles/default',   // this is the default
+    // Use a specific data directory on disk (optional, set to null for incognito)
+    userDataDir: '~/.config/browsernode/profiles/default',   // this is the default
     // ... any other BrowserProfile or playwright launchPersistentContext config...
     // headless: false,
-)
+})
 
-const agent = new Agent(
+const agent = new Agent({
     task: "Your task here",
     llm: llm,
     browserSession: browserSession,
-)
+})
 ```
 
 We support most `chromium`-based browsers in `executablePath`, including [Brave](https://github.com/leoning6/browsernode/tree/main/examples/browser/stealth.ts), [patchright chromium](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright), [rebrowser](https://rebrowser.net/), Edge, and more. See [`examples/browser/stealth.ts`](https://github.com/leoning6/browsernode/tree/main/examples/browser) for more. We do not support Firefox or Safari at the moment.
 
 <Warning>
-  [As of Chrome v136](),
-  driving browsers with the default profile is [no longer
+  As of Chrome v136, driving browsers with the default profile is [no longer
   supported](https://developer.chrome.com/blog/remote-debugging-port) for
   security reasons. browsernode has transitioned to creating a new dedicated
   profile for agents in: `~/.config/browsernode/profiles/default`. You can [open
@@ -76,27 +75,27 @@ const browser = await playwright.chromium.launch();
 const context = await browser.newContext();
 const page = await context.newPage();
 
-const browserSession = new BrowserSession(
+const browserSession = new BrowserSession({
         page: page,
-        // browserContext=context,  // all these are supported
-        // browser=browser,
-);
+        // browserContext: context,  // all these are supported
+        // browser: browser,
+});
 
-const agent = new Agent(
+const agent = new Agent({
     task: "Your task here",
     llm: llm,
     browserSession: browserSession,
-);
+});
 ```
 
 You can also pass `page` directly to `Agent(...)` as a shortcut.
 
 ```js
-const agent = new Agent(
+const agent = new Agent({
     task: "Your task here",
     llm: llm,
     page: page,
-)
+})
 ```
 
 ### Method C: Connect to Local Browser Using Browser PID
@@ -110,13 +109,13 @@ import { Agent, BrowserSession } from "browsernode";
 // /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --remote-debugging-port=9242
 
 // Then connect using the process ID
-const browserSession = new BrowserSession(browserPid=12345)  // Replace with actual Chrome PID
+const browserSession = new BrowserSession({ browserPid: 12345 })  // Replace with actual Chrome PID
 
-const agent = new Agent(
+const agent = new Agent({
     task: "Your task here",
     llm: llm,
     browserSession: browserSession,
-)
+})
 ```
 
 ### Method D: Connect to remote Playwright Node.js Browser Server via WSS URL
@@ -126,14 +125,14 @@ Connect to Playwright Node.js server providers:
 ```js
 import { Agent, BrowserSession } from "browsernode";
 
-# Connect to a playwright server
-const browserSession = new BrowserSession(wssUrl="wss://your-playwright-server.com/ws")
+// Connect to a playwright server
+const browserSession = new BrowserSession({ wssUrl: "wss://your-playwright-server.com/ws" })
 
-const agent = new Agent(
-    task="Your task here",
-    llm=llm,
+const agent = new Agent({
+    task: "Your task here",
+    llm: llm,
     browserSession: browserSession,
-)
+})
 ```
 
 ### Method E: Connect to Remote Browser via CDP URL
@@ -144,13 +143,13 @@ Connect to any remote Chromium-based browser:
 import { Agent, BrowserSession } from "browsernode";
 
 // Connect to Chrome via CDP
-const browserSession = new BrowserSession(cdpUrl="http://localhost:9222")
+const browserSession = new BrowserSession({ cdpUrl: "http://localhost:9222" })
 
-const agent = new Agent(
+const agent = new Agent({
     task: "Your task here",
     llm: llm,
     browserSession: browserSession,
-)
+})
 ```
 
 ## Security Considerations
@@ -171,31 +170,31 @@ const agent = new Agent(
 1. **Use isolated profiles**: Create separate Chrome profiles for different agents to limit scope of risk:
 
    ```js
-   const browserSession = new BrowserSession(
-       userDataDir='~/.config/browsernode/profiles/banking',
-       // profileDirectory='Default'
-   )
+   const browserSession = new BrowserSession({
+       userDataDir: '~/.config/browsernode/profiles/banking',
+       // profileDirectory: 'Default'
+   })
    ```
 
 2. **Limit domain access**: Restrict which sites the agent can visit:
 
    ```js
-   const browserSession = new BrowserSession(
+   const browserSession = new BrowserSession({
        allowedDomains: ['example.com', 'http*://*.github.com'],
-   )
+   })
    ```
 
 3. **Enable `keepAlive=true`** If you want to use a single `BrowserSession` with more than one agent:
    ```js
-   const browserSession = new BrowserSession(
+   const browserSession = new BrowserSession({
        keepAlive: true,
-       ...
-   )
+       // ... other options
+   })
    await browserSession.start()  // start the session yourself before passing to Agent
-   ...
-   const agent = new Agent(..., browserSession: browserSession)
+   // ...
+   const agent = new Agent({ ..., browserSession: browserSession })
    await agent.run()
-   ...
+   // ...
    await browserSession.kill()   // end the session yourself, shortcut for keepAlive=false + .stop()
    ```
 
@@ -225,20 +224,20 @@ If you are only running one agent & browser at a time, they can re-use the same 
 ```js
 import { Agent, BrowserSession } from "browsernode";
 
-const reusedProfile = new BrowserProfile(userDataDir='~/.config/browsernode/profiles/default')
+const reusedProfile = new BrowserProfile({ userDataDir: '~/.config/browsernode/profiles/default' })
 
-const agent1 = new Agent(
+const agent1 = new Agent({
     task: "The first task...",
     llm: llm,
     browserProfile: reusedProfile,    // pass the profile in, it will auto-create a session
-)
+})
 await agent1.run();
 
-const agent2 = new Agent(
+const agent2 = new Agent({
     task: "The second task...",
     llm: llm,
     browserProfile: reusedProfile,    // agent will auto-create its own new session
-)
+})
 await agent2.run();
 ```
 
@@ -252,20 +251,20 @@ Each agent will start off looking at the same tab the last agent ended off on.
 ```js
 import { Agent, BrowserSession } from "browsernode";
 
-const reusedSession = new BrowserSession(
-    userDataDir='~/.config/browsernode/profiles/default',
+const reusedSession = new BrowserSession({
+    userDataDir: '~/.config/browsernode/profiles/default',
     keepAlive: true,  // dont close browser after 1st agent.run() ends
-)
+})
 await reusedSession.start()   // when keepAlive=true, session must be started manually
 
-const agent1 = new Agent(
+const agent1 = new Agent({
     task: "The first task...",
     llm: llm,
     browserSession: reusedSession,
-)
+})
 await agent1.run();
 
-const agent2 = new Agent(
+const agent2 = new Agent({
     task: "The second task...",
     llm: llm,
     browserSession: reusedSession,      // re-use the same session
@@ -319,19 +318,19 @@ const context = await browser.newContext();
 const sharedPage = await context.newPage();
 await sharedPage.goto('https://example.com', waitUntil='domcontentloaded')
 
-const sharedSession = new BrowserSession(page: sharedPage, keepAlive: true)
+const sharedSession = new BrowserSession({ page: sharedPage, keepAlive: true })
 await sharedSession.start()
 
-const agent1 = new Agent(
+const agent1 = new Agent({
     task: "Fill out the form in section A...",
     llm: llm,
     browserSession: sharedSession,
-)
-const agent2 = new Agent(
+})
+const agent2 = new Agent({
     task: "Fill out the form in section B...",
     llm: llm,
     browserSession: sharedSession,
-)
+})
 await Promise.all([agent1.run(), agent2.run()]); // run in parallel
 
 await sharedSession.kill();
@@ -354,20 +353,20 @@ playwright open https://example.com/ --load-storage=/tmp/auth.json
 ```js
 import { Agent, BrowserProfile, BrowserSession } from "browsernode";
 
-const sharedProfile = new BrowserProfile(
+const sharedProfile = new BrowserProfile({
     headless: true,
-    userDataDir: None,               // use dedicated tmp userDataDir per session
+    userDataDir: null,               // use dedicated tmp userDataDir per session
     storageState: '/tmp/auth.json',   // load/save cookies to/from json file
     keepAlive: true,                  // don't close the browser after the agent finishes
-)
+})
 
-const window1 = new BrowserSession(browserProfile: sharedProfile)
+const window1 = new BrowserSession({ browserProfile: sharedProfile })
 await window1.start()
-const agent1 = new Agent(browserSession: window1)
+const agent1 = new Agent({ browserSession: window1 })
 
-const window2 = new BrowserSession(browserProfile: sharedProfile)
+const window2 = new BrowserSession({ browserProfile: sharedProfile })
 await window2.start()
-const agent2 = new Agent(browserSession: window2)
+const agent2 = new Agent({ browserSession: window2 })
 
 await Promise.all([agent1.run(), agent2.run()]);  // run in parallel
 await window1.saveStorageState();  // write storage state (cookies, localStorage, etc.) to auth.json

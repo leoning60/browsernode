@@ -19,7 +19,10 @@ const browserSession = new BrowserSession({
     userDataDir: "~/.config/browsernode/profiles/default",
 });
 
-const agent = new Agent("fill out the form on this page", browserSession);
+const agent = new Agent({
+  task: "fill out the form on this page",
+  browserSession: browserSession,
+});
 ```
 
 <Note>
@@ -31,7 +34,7 @@ const agent = new Agent("fill out the form on this page", browserSession);
 
 ## `BrowserSession`
 
-- `BrowserSession(**params)` is browsernode's object that tracks a connection to a running browser. It sets up:
+- `BrowserSession()` is browsernode's object that tracks a connection to a running browser. It sets up:
   - the `playwright`, `browser`, `browserContext`, and `page` objects and tracks which tabs the agent/human are focused on
   - methods to interact with the browser window, apply config needed by the Agent, and run the `DOMService` for element detection
   - it can take a `browserProfile=BrowserProfile(...)` template containing some config defaults,session-specific config overrides
@@ -88,7 +91,7 @@ playwright: Playwright | null = null
 
 Optional playwright or patchright API client handle to use, the result of `(import { chromium as PlaywrightChromium } from "playwright"; PlaywrightChromium)` or `( import { chromium as PatchrightChromium } from "patchright"; PatchrightChromium)`, which spawns a node.js child subprocess that relays commands to the browser over CDP.
 
-See here for [more detailed usage instructions](https://docs.browsernode.com/customize/real-browser#method-b%3A-connect-using-existing-playwright-objects).
+See here for [more detailed usage instructions](./customize/real-browser#method-b%3A-connect-using-existing-playwright-objects).
 
 #### `browser`
 
@@ -138,12 +141,12 @@ Mark BrowserSession as already initialized, skips launch/connection (not recomme
 `BrowserSession` can also accept *all* of the parameters [below](#browserprofile).
 (the parameters *above* this point are specific to `BrowserSession` and cannot be stored in a `BrowserProfile` template)
 
-Extra `**params` passed to `BrowserSession(...)` act as session-specific overrides to the `BrowserProfile(...)` template.
+Extra `{...params}` passed to `BrowserSession(...)` act as session-specific overrides to the `BrowserProfile(...)` template.
 
 ```js
 baseIphone13 = BrowserProfile(
     storageState='/tmp/auth.json',     # share cookies between parallel browsers
-    **playwright.devices['iPhone 13'],
+    ...playwright.devices['iPhone 13'],
     timezoneId='UTC',
 )
 usaPhone = BrowserSession(
@@ -155,8 +158,8 @@ euPhone = BrowserSession(
     timezoneId='Europe/Paris',
 )
 
-usaAgent = Agent(task='show me todays schedule...', browserSession=usaPhone)
-euAgent = Agent(task='show me todays schedule...', browserSession=euPhone)
+usaAgent = Agent({task: 'show me todays schedule...', browserSession: usaPhone})
+euAgent = Agent({task: 'show me todays schedule...', browserSession: euPhone})
 await Promise.all([usaAgent.run(), euAgent.run()])
 ```
 
@@ -173,7 +176,7 @@ When you find yourself storing or re-using many browser configs, you can upgrade
 
 ```diff
 - config = {key: val, key: val, ...}
-- BrowserSession(**config)
+- BrowserSession({...config})
 ```
 To this instead:
 ```diff
@@ -239,7 +242,7 @@ These parameters control browsernode-specific features, and are outside the stan
 keepAlive: boolean | null = null
 ```
 
-If `True` it wont close the browser after the first `agent.run()` ends. Useful for running multiple tasks with the same browser instance. If this is left as `None` and the Agent launched its own browser, the default is to close the browser after the agent completes. If the agent connected to an existing browser then it will leave it open.
+If `True` it wont close the browser after the first `agent.run()` ends. Useful for running multiple tasks with the same browser instance. If this is left as `null` and the Agent launched its own browser, the default is to close the browser after the agent completes. If the agent connected to an existing browser then it will leave it open.
 
 #### `stealth`
 
@@ -253,10 +256,10 @@ Set to `True` to use [`patchright`](https://github.com/Kaliiiiiiiiii-Vinyzu/patc
 #### `allowedDomains`
 
 ```js
-allowedDomains: list[str] | None = None
+allowedDomains: list[str] | null = null
 ```
 
-List of allowed domains for navigation. If None, all domains are allowed.
+List of allowed domains for navigation. If null, all domains are allowed.
 Example: `['google.com', '*.wikipedia.org']` - Here the agent will only be able to access `google.com` exactly and `wikipedia.org` + `*.wikipedia.org`.
   
 Glob patterns are supported:
@@ -298,7 +301,7 @@ It's a shortcut for adding these launch args:
 - `--deterministic-mode`
 - `--js-flags=--random-seed=1157259159`
 - `--force-color-profile=srgb`
-- `--font-render-hinting=none`
+- `--font-render-hinting=null`
 - `--force-device-scale-factor=2`
 - `--enable-webgl`
 
@@ -434,7 +437,7 @@ They are defined in `browsernode/browser/profile.ts`. See here for the [official
 headless: boolean | null = null
 ```
 
-Runs the browser without a visible UI. If None, auto-detects based on display availability. If you set `headless=False` on a server with no monitor attached, the browser will fail to launch (use `xvfb` + vnc to give a headless server a virtual display you can remote control). 
+Runs the browser without a visible UI. If null, auto-detects based on display availability. If you set `headless=False` on a server with no monitor attached, the browser will fail to launch (use `xvfb` + vnc to give a headless server a virtual display you can remote control). 
 
 `headless=False` is recommended for maximum stealth and is required for human-in-the-loop workflows.
 
@@ -462,9 +465,9 @@ Path to browser executable for custom installations.
 userDataDir: string | Path | null = '~/.config/browsernode/profiles/default'
 ```
 
-Directory for browser profile data. Set to `None` to use an ephemeral temporary profile (aka incognito mode).
+Directory for browser profile data. Set to `null` to use an ephemeral temporary profile (aka incognito mode).
 
-Multiple running browsers **cannot share a single `userDataDir` at the same time**. You must set it to `None` or
+Multiple running browsers **cannot share a single `userDataDir` at the same time**. You must set it to `null` or
 provide a unique `userDataDir` per-session if you plan to run multiple browsers.
 
 The browser version run must always be equal to or greater than the version used to create the `userDataDir`.
@@ -559,12 +562,12 @@ storageState: string | Path | Record<string, unknown> | null = null
 ```
 
 Browser storage state (cookies, localStorage). Can be file path or dict. See here for the [Playwright `storageState` documentation](https://playwright.dev/docs/api/class-browsercontext#browser-context-storage-state) on how to use it.
-This option is only applied when launching a new browser using the default builtin playwright chromium and `userDataDir=None` is set.
+This option is only applied when launching a new browser using the default builtin playwright chromium and `userDataDir=null` is set.
 
 ```bash
 # to create a storage state file, run the following and log into the sites you need once the browser opens:
 playwright open https://example.com/ --save-storage=./storageState.json
-# then setup a BrowserSession with storageState='./storageState.json' and userDataDir=None to use it
+# then setup a BrowserSession with storageState='./storageState.json' and userDataDir=null to use it
 ```
 
 ### Playwright Timing Settings
@@ -710,10 +713,10 @@ Reduced motion preference: `'reduce'`, `'no-preference'`, `'null'`
 #### `forcedColors`
 
 ```js
-forcedColors: ForcedColors = 'none'
+forcedColors: ForcedColors = 'null'
 ```
 
-Forced colors mode: `'active'`, `'none'`, `'null'`
+Forced colors mode: `'active'`, `'null'`
 
 ### Playwright Security Options
 
@@ -963,12 +966,12 @@ const page = await browserSession.getCurrentPage()
 await page.goto('https://example.com/first/page')
 
 async function runSearch(): Promise<void> {
-    const agent = new Agent(
+    const agent = new Agent({
         task: 'Your task',
         llm: llm,
-        page: page,                        # optional: pass a specific playwright page to start on
-        browserSession: browserSession,  # optional: pass an existing browser session to an agent
-    )
+        page: page,                        // optional: pass a specific playwright page to start on
+        browserSession: browserSession,  // optional: pass an existing browser session to an agent
+    })
 }
 ```
 

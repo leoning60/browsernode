@@ -9,8 +9,7 @@ icon: "robot"
 Here's how to configure the models.
 
 ### Migration from Langchain
-
-We have recently switched from Langchain to our own implementation of the models. To migrate the previous code, just replace `import { ChatOpenAI } from "@langchain/openai";` with `import { ChatOpenAI } from "browsernode";` or `import { ChatOpenAI } from "browsernode/llm";`  etc. The methods should be compatible(ish).
+with `import { ChatOpenAI } from "browsernode";` or `import { ChatOpenAI } from "browsernode/llm";`  etc. The methods should be compatible(ish).
 
 We also made and example [here](https://github.com/leoning60/browsernode/blob/main/examples/models/langchain) to help you stay with Langchain in case your workflow requires it.
 
@@ -45,7 +44,10 @@ const llm = new ChatOpenAI({
 	apiKey: process.env.OPENAI_API_KEY,
 });
 // Create agent with the model
-const agent = new Agent(task, llm);
+const agent = new Agent({
+    task: task,
+    llm: llm,
+});
 ```
 
 Required environment variables:
@@ -67,7 +69,10 @@ const llm = new ChatAnthropic({
 });
 
 // Create agent with the model
-const agent = new Agent(task, llm);
+const agent = new Agent({
+    task: task,
+    llm: llm,
+});
 ```
 
 And add the variable:
@@ -90,7 +95,10 @@ const llm = new ChatAzureOpenAI({
 });
 
 // Create agent with the model
-const agent = new Agent(task, llm);
+const agent = new Agent({
+    task: task,
+    llm: llm,
+});
 ```
 
 Required environment variables:
@@ -115,7 +123,10 @@ const llm = new ChatGoogle({
 });
 
 // Create agent with the model
-const agent = new Agent(task, llm);
+const agent = new Agent({
+    task: task,
+    llm: llm,
+});
 ```
 
 Required environment variables:

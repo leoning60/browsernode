@@ -11,9 +11,9 @@ When working with sensitive information like passwords or PII, you can use the `
 
 ```js
 const agent = new Agent(
-    "Log into example.com as user x_username with password x_password",
-    llm,
     {
+        task: "Log into example.com as user x_username with password x_password",
+        llm: llm,
         sensitiveData: {
             "https://example.com": {
               "x_username": "abc@example.com",
@@ -60,9 +60,9 @@ const task = `
 const browserSession = new BrowserSession({ allowedDomains: ["https://*.example.com"] });
 
 const agent = new Agent(
-    task,
-    llm,
     {
+        task: task,
+        llm: llm,
         sensitiveData: sensitiveData, // Pass the sensitive data to the agent
         browserSession: browserSession, // Pass the restricted browserSession to limit URLs Agent can visit
         useVision: false, // Disable vision or else the LLM might see entered values in screenshots
@@ -103,7 +103,7 @@ Then use those cookies when the agent runs:
 
 ```js
 const agent = new Agent(
-    ...,
+    //...
     {
         browserSession: new BrowserSession({ storageState: "./auth.json" }),
     }
@@ -179,9 +179,9 @@ const browserSession = new BrowserSession({
 
 // Pass the sensitive data to the agent
 const agent = new Agent(
-    "Log into Google, then check my account information",
-    llm,
     {
+        task:"Log into Google, then check my account information",
+        llm: llm,
         sensitiveData: sensitiveData,
         browserSession: browserSession,
         useVision: false,
